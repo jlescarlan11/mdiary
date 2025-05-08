@@ -12,9 +12,16 @@ exports.signup = async (req, res) => {
   const { username, email, password } = req.body;
 
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (await query.user.getByEmail(email)) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
 
-    await query.user.create(username, email, hashedPassword);
+    if (await query.user.getByUsername(username)) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await query.user.create(username, email, hashedPassword);
 
     res.status(201).json({ message: "User Created" });
   } catch (err) {
@@ -35,7 +42,7 @@ exports.login = async (req, res) => {
     if (!valid) return res.status(401).json({ error: "Invalid credentials" });
 
     const token = generateToken(user);
-    res.json({ token, username: user.username });
+    res.status(201).json({ message: "User Created", token });
   } catch (err) {
     res.status(500).json({ error: "Something went wrong" });
   }
@@ -55,6 +62,8 @@ exports.dashboard = (req, res) => {
 };
 
 exports.checkUsername = async (req, res) => {
+  if (!req.query.username)
+    return res.status(400).json({ error: "Username is required" });
   const user = await query.user.getByUsername(req.query.username);
   res.json({ exists: !!user });
 };
