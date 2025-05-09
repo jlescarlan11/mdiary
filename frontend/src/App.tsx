@@ -1,35 +1,77 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import Signup from "./pages/SignUp";
+import { isAuthenticated } from "./auth";
+import Dashboard from "./pages/Dashboard";
+import Navbar from "./components/Navbar";
+import LogIn from "./pages/LogIn";
 
-function App() {
-  const [count, setCount] = useState(0)
+interface RouteProps {
+  children: React.ReactNode;
+}
+
+const ProtectedRoute: React.FC<RouteProps> = ({ children }) => {
+  return isAuthenticated() ? children : <Navigate to={"/login"} />;
+};
+
+const PublicRoute: React.FC<RouteProps> = ({ children }) => {
+  return isAuthenticated() ? <Navigate to="/dashboard" /> : children;
+};
+
+const Layout = () => {
+  const location = useLocation();
+  const hideNavbar = ["/login", "/signup"].includes(location.pathname);
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      {!hideNavbar && <Navbar />}
+      <Outlet />
     </>
-  )
+  );
+};
+
+function App() {
+  return (
+    <Routes>
+      <Route element={<Layout />}>
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LogIn />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <PublicRoute>
+              <Signup />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
+      {/* <Route
+        path="/signup"
+        element={isAuthenticated() ? <Navigate to="/dashboard" /> : <Signup />}
+      />
+      <Route
+        path="/login"
+        element={isAuthenticated() ? <Navigate to="/dashboard" /> : <LogIn />}
+      />
+      <Route
+        path="/dashboard"
+        element={isAuthenticated() ? <Dashboard /> : <Navigate to="/login" />}
+      /> */}
+    </Routes>
+  );
 }
 
-export default App
+export default App;
