@@ -34,6 +34,16 @@ function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route
+          path="/"
+          element={
+            isAuthenticated() ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
           path="/login"
           element={
             <PublicRoute>

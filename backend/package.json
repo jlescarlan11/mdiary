@@ -1,27 +1,40 @@
 {
-  "name": "backend",
+  "name": "mdiary",
   "version": "1.0.0",
-  "description": "mdiary backend",
+  "description": "movie diary applying sql database",
   "main": "src/app.js",
   "scripts": {
-    "start": "nodemon src/app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon src/app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jlescarlan11/mdiary.git"
   },
   "keywords": [
-    "backend",
+    "movie",
+    "diary",
     "sql",
-    "movie_diary"
+    "database",
+    "john",
+    "lester",
+    "escarlan"
   ],
   "author": "John Lester Escarlan <jlescarlan11@gmail.com> (https://john-lester-escarlan-portfolio.vercel.app/)",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jlescarlan11/mdiary/issues"
+  },
+  "homepage": "https://github.com/jlescarlan11/mdiary#readme",
   "dependencies": {
     "@prisma/client": "^6.7.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "passport": "^0.7.0",
+    "morgan": "^1.10.0",
     "passport-jwt": "^4.0.1",
     "prisma": "^6.7.0"
   },

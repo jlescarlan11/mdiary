@@ -10,47 +10,58 @@ const generateToken = (user) => {
 
 exports.signup = async (req, res) => {
   const { username, email, password } = req.body;
-
   try {
     if (await query.user.getByEmail(email)) {
-      return res.status(400).json({ message: "Email already exists" });
+      return res.status(409).json({ message: "Email already exists" });
     }
-
     if (await query.user.getByUsername(username)) {
-      return res.status(400).json({ message: "Username already exists" });
+      return res.status(409).json({ message: "Username already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await query.user.create(username, email, hashedPassword);
 
-    res.status(201).json({ message: "User Created" });
+    // Generate token and return
+    const token = generateToken(user);
+    res.status(201).json({
+      message: "User created",
+      user: { id: user.id, username: user.username, email: user.email },
+      token,
+    });
   } catch (err) {
-    console.error("Signup error: ", err);
-    res.status(400).json({ error: "User already exists or invalid data" });
+    console.error("Signup error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 };
 
 exports.login = async (req, res) => {
   const { email, password } = req.body;
-
   try {
     const user = await query.user.getByEmail(email);
-
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
+    // Generate and return token
     const token = generateToken(user);
-    res.status(201).json({ message: "User Created", token });
+    res.status(200).json({
+      message: "Login successful",
+      user: { id: user.id, username: user.username, email: user.email },
+      token,
+    });
   } catch (err) {
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 };
 
 exports.dashboard = (req, res) => {
   try {
-    console.log("Authenticated User:", req.user); // Add this line
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
