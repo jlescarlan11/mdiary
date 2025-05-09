@@ -3,6 +3,9 @@ const mdRouter = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const mdController = require("../controllers/mdController");
 
+mdRouter.get("/", (req, res) => {
+  res.json("Hello from backend");
+});
 mdRouter.post("/signup", mdController.signup);
 mdRouter.post("/login", mdController.login);
 mdRouter.get("/dashboard", authMiddleware, mdController.dashboard);
