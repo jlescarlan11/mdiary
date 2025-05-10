@@ -41,7 +41,7 @@ const Layout: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <>
+    <div className="container mx-auto max-w-7xl">
       <Routes>
         <Route element={<Layout />}>
           <Route
@@ -73,7 +73,7 @@ const App: React.FC = () => {
           />
         </Route>
       </Routes>
-    </>
+    </div>
   );
 };
 

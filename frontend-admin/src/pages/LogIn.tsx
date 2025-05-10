@@ -2,12 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { login } from "../auth";
 import { useNavigate, Link } from "react-router-dom";
-import {
-  LuKeyRound,
-  LuLaptopMinimal,
-  LuMail,
-  LuNewspaper,
-} from "react-icons/lu";
+import { LuKeyRound, LuLaptopMinimal, LuMail } from "react-icons/lu";
 
 interface FormData {
   email: string;
