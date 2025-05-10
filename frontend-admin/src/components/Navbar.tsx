@@ -16,7 +16,7 @@ const Navbar: React.FC<NavbarProps> = ({ children }) => {
   };
 
   return (
-    <div className="flex items-center justify-between p-4 bg-base-100 shadow">
+    <div className="flex items-center justify-between p-4 bg-base-100">
       <div className="text-xl font-semibold">Navbar</div>
       <div className="flex items-center space-x-4">
         {children}
