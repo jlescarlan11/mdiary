@@ -22,4 +22,6 @@ module.exports = {
       return await prisma.user.findUnique({ where: { id } });
     },
   },
+  genre: { getAll: async () => await prisma.genre.findMany() },
+  director: { getAll: async () => await prisma.director.findMany() },
 };

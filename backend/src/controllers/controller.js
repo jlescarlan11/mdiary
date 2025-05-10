@@ -1,6 +1,8 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const query = require("../utils/query");
+const { PrismaClient } = require("../../generated/prisma");
+const prisma = new PrismaClient();
 
 // Helper to sign a JWT
 function generateToken(user) {
@@ -128,6 +130,99 @@ const controller = {
     } catch (err) {
       console.error("Dashboard error:", err);
       res.status(500).json({ error: "Server error" });
+    }
+  },
+  createMovie: async (req, res) => {
+    try {
+      const {
+        title,
+        year,
+        duration,
+        description,
+        posterUrl,
+        genres = [],
+        directors = [],
+      } = req.body;
+
+      // Validation
+      if (!title || !year || !duration || !description || !posterUrl) {
+        return res
+          .status(400)
+          .json({ error: "All required fields must be provided" });
+      }
+
+      const movie = await prisma.movie.create({
+        data: {
+          title,
+          year: parseInt(year),
+          duration: parseInt(duration),
+          description,
+          posterUrl,
+          genres: {
+            create: genres.map((name) => ({
+              genre: {
+                connectOrCreate: {
+                  where: { name },
+                  create: { name },
+                },
+              },
+            })),
+          },
+          directors: {
+            create: directors.map(({ firstName, lastName }) => ({
+              director: {
+                connectOrCreate: {
+                  where: {
+                    firstName_lastName: {
+                      firstName,
+                      lastName,
+                    },
+                  },
+                  create: { firstName, lastName },
+                },
+              },
+            })),
+          },
+        },
+        include: {
+          genres: { include: { genre: true } },
+          directors: { include: { director: true } },
+        },
+      });
+
+      res.status(201).json(movie);
+    } catch (error) {
+      console.error("Error creating movie:", error);
+
+      if (error.code === "P2002") {
+        return res
+          .status(400)
+          .json({ error: "Movie with this title already exists" });
+      }
+      if (error.code === "P2003") {
+        return res.status(400).json({ error: "Invalid data format provided" });
+      }
+
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+  getAllGenres: async (req, res) => {
+    try {
+      const genres = await query.genre.getAll();
+      res.status(200).json(genres);
+    } catch (err) {
+      console.error("Error fetching genres:", err);
+      res.status(500).json({ error: "Server error fetching genres" });
+    }
+  },
+
+  getAllDirectors: async (req, res) => {
+    try {
+      const directors = await query.director.getAll();
+      res.status(200).json(directors);
+    } catch (err) {
+      console.error("Error fetching directors:", err);
+      res.status(500).json({ error: "Server error fetching directors" });
     }
   },
 };
