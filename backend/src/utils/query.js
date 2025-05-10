@@ -1,21 +1,25 @@
+// Load the Prisma client
 const { PrismaClient } = require("../../generated/prisma");
 const prisma = new PrismaClient();
 
+// The query object with user operations
 module.exports = {
   user: {
-    create: async (username, email, hashedPassword) => {
+    create: async (username, email, password, admin) => {
       return await prisma.user.create({
-        data: { username, email, password: hashedPassword },
+        data: {
+          username,
+          email,
+          password,
+          role: admin ? "ADMIN" : "USER",
+        },
       });
-    },
-    getById: async (id) => {
-      return await prisma.user.findUnique({ where: { id } });
     },
     getByEmail: async (email) => {
       return await prisma.user.findUnique({ where: { email } });
     },
-    getByUsername: async (username) => {
-      return await prisma.user.findUnique({ where: { username } });
+    getById: async (id) => {
+      return await prisma.user.findUnique({ where: { id } });
     },
   },
 };
