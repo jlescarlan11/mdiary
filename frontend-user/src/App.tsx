@@ -1,6 +1,7 @@
 // src/App.tsx
-import React from "react";
+import React, { useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import Signup from "./pages/SignUp";
 import LogIn from "./pages/LogIn";
 import Dashboard from "./pages/Dashboard";
 import Navbar from "./components/Navbar";
@@ -12,22 +13,30 @@ interface RouteProps {
 }
 
 const ProtectedRoute: React.FC<RouteProps> = ({ children }) =>
-  isAuthenticated() ? <>{children}</> : <Navigate to="/login" replace />;
+  isAuthenticated() ? (
+    <>{children}</>
+  ) : (
+    <>
+      <Dashboard />
+    </>
+  );
 
 const PublicRoute: React.FC<RouteProps> = ({ children }) =>
   isAuthenticated() ? <Navigate to="/" replace /> : <>{children}</>;
 
 const Layout: React.FC = () => {
   const location = useLocation();
-  const hideNavbar = ["/login", "/signup"].includes(location.pathname);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme") || "light";
+    document.documentElement.setAttribute("data-theme", saved);
+  }, [location.pathname]);
 
   return (
     <>
-      {!hideNavbar && (
-        <Navbar>
-          <ThemeSwitcher />
-        </Navbar>
-      )}
+      <Navbar>
+        <ThemeSwitcher />
+      </Navbar>
       <Outlet />
     </>
   );
@@ -35,26 +44,36 @@ const Layout: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LogIn />
-            </PublicRoute>
-          }
-        />
-      </Route>
-    </Routes>
+    <div className="container mx-auto max-w-7xl">
+      <Routes>
+        <Route element={<Layout />}>
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LogIn />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              <PublicRoute>
+                <Signup />
+              </PublicRoute>
+            }
+          />
+        </Route>
+      </Routes>
+    </div>
   );
 };
 

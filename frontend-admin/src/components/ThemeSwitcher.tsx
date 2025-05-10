@@ -1,16 +1,19 @@
-// src/components/ThemeSwitcher.tsx
+// ThemeSwitcher.tsx (React + TypeScript)
 import { useEffect, useState } from "react";
 
 const ThemeSwitcher: React.FC = () => {
+  // load saved theme or fallback to light
   const [theme, setTheme] = useState<string>(
     () => localStorage.getItem("theme") || "light"
   );
 
+  // whenever `theme` changes, apply it and persist
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
   }, [theme]);
 
+  // you could pull the list of themes from a constant or fetch from DaisyUI docs
   const themes = [
     "light",
     "dark",
@@ -23,6 +26,7 @@ const ThemeSwitcher: React.FC = () => {
     "cyberpunk",
     "valentine",
     "halloween",
+    // … the rest of the 35+ names …
   ];
 
   return (

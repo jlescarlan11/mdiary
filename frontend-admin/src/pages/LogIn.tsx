@@ -2,7 +2,12 @@ import React, { useState } from "react";
 import axios from "axios";
 import { login } from "../auth";
 import { useNavigate, Link } from "react-router-dom";
-import { LuKeyRound, LuMail, LuNewspaper } from "react-icons/lu";
+import {
+  LuKeyRound,
+  LuLaptopMinimal,
+  LuMail,
+  LuNewspaper,
+} from "react-icons/lu";
 
 interface FormData {
   email: string;
@@ -38,7 +43,7 @@ const LogIn: React.FC = () => {
 
       const res = await axios.post(loginUrl, formData);
       login(res.data.token);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       console.error(err);
 
@@ -61,8 +66,8 @@ const LogIn: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col items-center bg-base-100 py-8 px-4">
       <div className="text-4xl flex items-center mb-8 gap-4">
-        <LuNewspaper className="" />
-        <h1 className="font-bold">Sutta's Blog</h1>
+        <LuLaptopMinimal className="" />
+        <h1 className="font-bold">CineLog</h1>
       </div>
       <form
         onSubmit={handleSubmit}

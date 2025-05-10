@@ -1,6 +1,7 @@
 // src/App.tsx
-import React from "react";
+import React, { useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+
 import LogIn from "./pages/LogIn";
 import Dashboard from "./pages/Dashboard";
 import Navbar from "./components/Navbar";
@@ -15,11 +16,16 @@ const ProtectedRoute: React.FC<RouteProps> = ({ children }) =>
   isAuthenticated() ? <>{children}</> : <Navigate to="/login" replace />;
 
 const PublicRoute: React.FC<RouteProps> = ({ children }) =>
-  isAuthenticated() ? <Navigate to="/" replace /> : <>{children}</>;
+  isAuthenticated() ? <Navigate to="/dashboard" replace /> : <>{children}</>;
 
 const Layout: React.FC = () => {
   const location = useLocation();
   const hideNavbar = ["/login", "/signup"].includes(location.pathname);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme") || "light";
+    document.documentElement.setAttribute("data-theme", saved);
+  }, [location.pathname]);
 
   return (
     <>
@@ -35,26 +41,39 @@ const Layout: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LogIn />
-            </PublicRoute>
-          }
-        />
-      </Route>
-    </Routes>
+    <>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route
+            path="/"
+            element={
+              isAuthenticated() ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LogIn />
+              </PublicRoute>
+            }
+          />
+
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+      </Routes>
+    </>
   );
 };
 
