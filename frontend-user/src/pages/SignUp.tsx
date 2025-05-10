@@ -2,22 +2,29 @@ import React, { useState } from "react";
 import axios from "axios";
 import { login } from "../auth";
 import { useNavigate } from "react-router-dom";
-import { LuKeyRound, LuMail, LuNewspaper, LuUser } from "react-icons/lu";
+import { LuKeyRound, LuMail, LuUser } from "react-icons/lu";
+import { useSearchParams } from "react-router-dom";
 
 interface FormData {
   username: string;
   email: string;
   password: string;
   confirmPassword: string;
+  inviteCode: string; // ← new
 }
 
 const Signup: React.FC = () => {
+  const [search] = useSearchParams();
+  const inviteCode = search.get("invite") || "";
+
   const [formData, setFormData] = useState<FormData>({
     username: "",
     email: "",
     password: "",
     confirmPassword: "",
+    inviteCode: inviteCode,
   });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -48,7 +55,7 @@ const Signup: React.FC = () => {
 
       const res = await axios.post(signupUrl, formData);
       login(res.data.token);
-      navigate("/dashboard");
+      navigate("/");
     } catch (err) {
       console.error(err);
       setError("Signup failed. Please try again.");
@@ -58,11 +65,7 @@ const Signup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-base-100 p-4">
-      <div className="text-4xl flex items-center mb-8 gap-4">
-        <LuNewspaper className="" />
-        <h1 className=" font-bold ">CineDiary</h1> {/*To change*/}
-      </div>
+    <div className="flex flex-col flex-1 items-center bg-base-100 py-8 px-4">
       <form
         onSubmit={handleSubmit}
         className="card w-full max-w-md shadow-lg bg-base-200"
@@ -94,7 +97,7 @@ const Signup: React.FC = () => {
             </div>
           )}
 
-          <div className="flex flex-col  mb-4">
+          <div className="flex flex-col mb-4">
             <label className="input validator w-full">
               <LuUser className="opacity-50" />
               <input
@@ -102,9 +105,9 @@ const Signup: React.FC = () => {
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                placeholder="Username"
+                placeholder="username"
                 required
-                pattern="[A-Za-z][A-Za-z0-9/-]*"
+                pattern="[A-Za-z][A-Za-z ]*"
                 minLength={3}
                 maxLength={30}
               />
@@ -157,6 +160,8 @@ const Signup: React.FC = () => {
               required
             />
           </label>
+
+          <input type="hidden" name="inviteCode" value={formData.inviteCode} />
 
           <button
             type="submit"
