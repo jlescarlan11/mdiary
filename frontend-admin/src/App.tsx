@@ -8,6 +8,8 @@ import Navbar from "./components/Navbar";
 import ThemeSwitcher from "./components/ThemeSwitcher";
 import { isAuthenticated } from "./auth";
 
+import Movies from "./pages/Movies";
+
 interface RouteProps {
   children: React.ReactNode;
 }
@@ -68,6 +70,15 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/movies"
+            element={
+              <ProtectedRoute>
+                <Movies />
               </ProtectedRoute>
             }
           />

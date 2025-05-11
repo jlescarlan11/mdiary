@@ -1,20 +1,12 @@
-const jwt = require("jsonwebtoken"); // <-- Add this line
+// middleware/authorize.js
 
-module.exports = async (req, res, next) => {
-  const token = req.header("Authorization")?.replace("Bearer ", "");
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
+module.exports = function authorize(role) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role,
-    };
+    if (req.user?.role !== role) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     next();
-  } catch (err) {
-    console.error("JWT Error:", err.message); // Log the error details
-    res.status(401).json({ error: "Invalid token" });
-  }
+  };
 };

@@ -1,3 +1,4 @@
+// routes/router.js
 const express = require("express");
 const { controller } = require("../controllers/controller");
 const authenticate = require("../middleware/authenticate");
@@ -5,18 +6,52 @@ const authorize = require("../middleware/authorize");
 
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  res.json("hello from backend");
-});
+// Existing routes
+router.get("/", (req, res) => res.json("hello from backend"));
 router.post("/api/auth/signup", controller.signup);
 router.post("/api/auth/login", controller.login);
-
 router.post("/api/admin/login", controller.adminLogin);
-// router.get(
-//   "/api/admin/data",
-//   authenticate,
-//   authorize("ADMIN"),
-//   controller.dashboard
-// );
+
+// Fixed movie creation route
+router.post(
+  "/api/movies", // Changed endpoint for better REST conventions
+  authenticate,
+  authorize("ADMIN"),
+  controller.createMovie
+);
+router.get(
+  "/api/movies", // Changed endpoint for better REST conventions
+  authenticate,
+  authorize("ADMIN"),
+  controller.getAllMovies
+);
+
+router.get(
+  "/api/genre",
+  authenticate,
+  authorize("ADMIN"),
+  controller.getAllGenres
+);
+
+router.get(
+  "/api/director",
+  authenticate,
+  authorize("ADMIN"),
+  controller.getAllDirectors
+);
+
+router.get(
+  "/api/movies",
+  authenticate,
+  authorize("ADMIN"),
+  controller.getAllMovies
+);
+
+router.get(
+  "/api/admin/dashboard",
+  authenticate,
+  authorize("ADMIN"),
+  controller.getEntryAnalytics
+);
 
 module.exports = router;
