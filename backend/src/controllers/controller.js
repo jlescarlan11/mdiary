@@ -225,6 +225,16 @@ const controller = {
       res.status(500).json({ error: "Server error fetching directors" });
     }
   },
+  getAllMovies: async (req, res) => {
+    try {
+      const movies = await query.movie.getAll();
+      console.log(movies);
+      res.status(200).json(movies);
+    } catch (err) {
+      console.error("Error fetching directors:", err);
+      res.status(500).json({ error: "Server error fetching directors" });
+    }
+  },
 };
 
 module.exports = { controller };

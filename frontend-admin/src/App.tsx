@@ -7,7 +7,8 @@ import Dashboard from "./pages/Dashboard";
 import Navbar from "./components/Navbar";
 import ThemeSwitcher from "./components/ThemeSwitcher";
 import { isAuthenticated } from "./auth";
-import MovieForm from "./pages/MovieForm";
+
+import Movies from "./pages/Movies";
 
 interface RouteProps {
   children: React.ReactNode;
@@ -68,7 +69,16 @@ const App: React.FC = () => {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <MovieForm />
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/movies"
+            element={
+              <ProtectedRoute>
+                <Movies />
               </ProtectedRoute>
             }
           />

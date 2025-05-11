@@ -1,3 +1,4 @@
+// MovieForm.tsx
 import { useEffect, useState } from "react";
 import axios, { AxiosError } from "axios";
 
@@ -15,7 +16,12 @@ interface Director {
   lastName: string;
 }
 
-export default function MovieForm() {
+// Add onSuccess prop to notify parent when creation succeeds
+interface MovieFormProps {
+  onSuccess?: () => void;
+}
+
+export default function MovieForm({ onSuccess }: MovieFormProps) {
   // --- Form state ---
   const [formData, setFormData] = useState<MovieFormData>({
     title: "",
@@ -64,7 +70,6 @@ export default function MovieForm() {
         setAvailableDirectors(
           Array.isArray(directorRes.data) ? directorRes.data : []
         );
-        console.log(directorRes.data);
       } catch (err) {
         console.error("Error fetching genres/directors:", err);
       }
@@ -87,7 +92,6 @@ export default function MovieForm() {
     } else if (val && !genres.includes(val)) {
       setGenres((g) => [...g, val]);
     }
-    // reset select
     e.target.value = "";
   };
 
@@ -176,6 +180,8 @@ export default function MovieForm() {
         setShowGenreInput(false);
         setShowDirectorInput(false);
         alert("Movie created successfully!");
+        // call parent callback to re-fetch
+        onSuccess?.();
       }
     } catch (err) {
       if (err instanceof AxiosError) {

@@ -19,6 +19,12 @@ router.post(
   authorize("ADMIN"),
   controller.createMovie
 );
+router.get(
+  "/api/movies", // Changed endpoint for better REST conventions
+  authenticate,
+  authorize("ADMIN"),
+  controller.getAllMovies
+);
 
 router.get(
   "/api/genre",
@@ -32,6 +38,13 @@ router.get(
   authenticate,
   authorize("ADMIN"),
   controller.getAllDirectors
+);
+
+router.get(
+  "/api/movies",
+  authenticate,
+  authorize("ADMIN"),
+  controller.getAllMovies
 );
 
 module.exports = router;
