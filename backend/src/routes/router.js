@@ -47,4 +47,11 @@ router.get(
   controller.getAllMovies
 );
 
+router.get(
+  "/api/admin/dashboard",
+  authenticate,
+  authorize("ADMIN"),
+  controller.getEntryAnalytics
+);
+
 module.exports = router;

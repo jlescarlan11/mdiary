@@ -235,6 +235,26 @@ const controller = {
       res.status(500).json({ error: "Server error fetching directors" });
     }
   },
+  getEntryAnalytics: async (req, res) => {
+    const { startDate, endDate } = req.query;
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (!start || !end) {
+      return res.status(400).json({
+        error: "Both startDate and endDate (YYYY-MM-DD) are required.",
+      });
+    }
+
+    try {
+      const stats = await query.adminDashboard.getAll(start, end);
+      res.status(200).json(stats);
+    } catch (error) {
+      console.error("Error fetching diary stats:", error);
+      return res.status(500).json({ error: "Internal server error." });
+    }
+  },
 };
 
 module.exports = { controller };

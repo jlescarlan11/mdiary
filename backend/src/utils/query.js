@@ -49,9 +49,27 @@ module.exports = {
       return withAvg;
     },
   },
-  dashboard: {
-    // getAll: async () => {
-    //   const
-    // }
+  adminDashboard: {
+    getAll: async (startDate, endDate) => {
+      const raw = await prisma.diaryEntry.groupBy({
+        by: ["lastWatchedDate"],
+        _count: { id: true },
+        _avg: { rating: true },
+        _sum: { watchedCount: true },
+        where: {
+          lastWatchedDate: {
+            gte: new Date(startDate),
+            lte: new Date(endDate),
+          },
+        },
+        orderBy: { lastWatchedDate: "asc" },
+      });
+      return raw.map((s) => ({
+        date: s.lastWatchedDate.toISOString().slice(0, 10),
+        entryCount: s._count.id,
+        avgRating: Number((s._avg.rating ?? 0).toFixed(2)),
+        totalWatchCount: s._sum.watchedCount,
+      }));
+    },
   },
 };
