@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const query = require("../utils/query"); // Assuming query.js contains functions for user, genre, director, movie
+const query = require("../utils/query"); // Assuming query.js contains functions for user, genre, director, movie, adminDashboard
 const { PrismaClient } = require("../../generated/prisma");
 const prisma = new PrismaClient();
 
@@ -397,18 +397,6 @@ const controller = {
     }
   },
 
-  // This function is no longer needed as getMovies handles fetching with analytics
-  // getAllMovies: async (req, res) => {
-  //   try {
-  //     // Fetch all movies using the query helper which now includes average rating
-  //     const movies = await query.movie.getAll();
-  //     res.status(200).json(movies);
-  //   } catch (err) {
-  //     console.error("Error fetching movies:", err);
-  //     res.status(500).json({ error: "An error occurred fetching movies." });
-  //   }
-  // },
-
   getCombinedDashboardData: async (req, res) => {
     const { startDate, endDate } = req.query;
 
@@ -430,48 +418,22 @@ const controller = {
         });
       }
 
-      // Use Promise.all to fetch data concurrently
-      const [stats, totals] = await Promise.all([
-        // 1. Get time-based analytics from DiaryEntry
-        prisma.diaryEntry.groupBy({
-          by: ["lastWatchedDate"],
-          _count: { id: true },
-          _avg: { rating: true },
-          _sum: { watchedCount: true },
-          where: { lastWatchedDate: { gte: start, lte: end } },
-          orderBy: { lastWatchedDate: "asc" },
-        }),
-
-        // 2. Get total counts (users, entries, likes, new signups in last 7 days)
-        (async () => {
-          const [users, entries, likes, newSignups] = await Promise.all([
-            prisma.user.count(),
-            prisma.diaryEntry.count(),
-            prisma.entryLike.count(),
-            prisma.user.count({
-              where: {
-                createdAt: {
-                  gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
-                },
-              },
-            }),
-          ]);
-          return { users, entries, likes, newSignups };
-        })(),
-
-        // NOTE: Removed ActivityLog fetching as it's not in the provided schema.
-      ]);
+      // Use the updated query function to fetch stats, totals, and activities
+      const dashboardData = await query.adminDashboard.getAll(
+        startDate,
+        endDate
+      );
 
       // Format and send the combined data
       res.status(200).json({
-        stats: stats.map((s) => ({
-          date: s.lastWatchedDate.toISOString().slice(0, 10), // Format date as YYYY-MM-DD
-          entryCount: s._count.id,
-          avgRating: Number((s._avg.rating ?? 0).toFixed(2)), // Format average rating
-          totalWatchCount: s._sum.watchedCount,
+        stats: dashboardData.stats.map((s) => ({
+          date: s.date, // Already formatted in query.js
+          entryCount: s.entryCount,
+          avgRating: Number((s.averageRating ?? 0).toFixed(2)), // Format average rating
+          totalWatchCount: s.totalWatchedCount,
         })),
-        totals,
-        activities: [], // Provide an empty array or remove this field if not needed
+        totals: dashboardData.totals,
+        activities: dashboardData.activities, // Include recent activities
       });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);

@@ -453,7 +453,7 @@ module.exports = {
   adminDashboard: {
     getAll: async (startDate, endDate) => {
       try {
-        // Fetch time-based analytics from DiaryEntry
+        // Fetch time-based analytics from DiaryEntry within the date range
         const stats = await prisma.diaryEntry.groupBy({
           by: ["lastWatchedDate"],
           _count: { id: true },
@@ -483,8 +483,18 @@ module.exports = {
         ]);
         const totals = { users, entries, likes, newSignups };
 
-        // NOTE: ActivityLog is not in the provided schema, so we are not fetching it here.
-        // If you add an ActivityLog model, you can uncomment the relevant code in the controller.
+        // Fetch recent activity logs (e.g., last 20 activities)
+        const recentActivities = await prisma.activityLog.findMany({
+          orderBy: { createdAt: "desc" },
+          take: 20, // Limit to recent activities
+          include: {
+            user: {
+              select: {
+                username: true, // Include username of the user who performed the activity
+              },
+            },
+          },
+        });
 
         // Format and return the data
         return {
@@ -495,6 +505,7 @@ module.exports = {
             totalWatchedCount: s._sum.watchedCount || 0,
           })),
           totals,
+          activities: recentActivities, // Include recent activities
         };
       } catch (error) {
         console.error("Prisma error fetching admin dashboard data:", error);

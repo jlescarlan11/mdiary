@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { toast } from "react-hot-toast";
-import { LuTrash, LuPlus } from "react-icons/lu";
+import { LuPlus } from "react-icons/lu";
 
 // --- Interfaces ---
 interface Director {
@@ -15,7 +15,7 @@ interface Genre {
   name: string;
 }
 
-interface EditableMovieData {
+export interface EditableMovieData {
   id?: string; // Optional for adding
   title: string;
   year: number;
