@@ -124,9 +124,9 @@ const GenresChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         <Line
           type="monotone"
           dataKey="count"
-          className="stroke-base stroke-3"
+          className=""
           dot={{
-            className: "fill-base-content stroke-2",
+            className: "fill-primary stroke-2 stroke-primary",
             r: 5,
           }}
           activeDot={{
@@ -176,9 +176,9 @@ const DirectorsChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         <Line
           type="monotone"
           dataKey="count"
-          className="stroke-base stroke-3"
+          className=""
           dot={{
-            className: "fill-base-content stroke-2",
+            className: "fill-primary stroke-2 stroke-primary",
             r: 5,
           }}
           activeDot={{
