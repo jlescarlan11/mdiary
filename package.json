@@ -1,6 +1,8 @@
 {
   "dependencies": {
-    "react-datepicker": "^8.3.0"
+    "react-datepicker": "^8.3.0",
+    "sweetalert2": "^11.21.0",
+    "use-debounce": "^10.0.4"
   },
   "devDependencies": {
     "@types/react": "^19.1.3",

@@ -6,52 +6,34 @@ const authorize = require("../middleware/authorize");
 
 const router = express.Router();
 
-// Existing routes
+// Public routes
 router.get("/", (req, res) => res.json("hello from backend"));
 router.post("/api/auth/signup", controller.signup);
 router.post("/api/auth/login", controller.login);
-router.post("/api/admin/login", controller.adminLogin);
 
-// Fixed movie creation route
-router.post(
-  "/api/movies", // Changed endpoint for better REST conventions
-  authenticate,
-  authorize("ADMIN"),
-  controller.createMovie
-);
-router.get(
-  "/api/movies", // Changed endpoint for better REST conventions
-  authenticate,
-  authorize("ADMIN"),
-  controller.getAllMovies
-);
+// Admin routes - grouped and protected by authentication and authorization middleware
+const adminRouter = express.Router();
+adminRouter.use(authenticate, authorize("ADMIN")); // Apply middleware to all admin routes
 
-router.get(
-  "/api/genre",
-  authenticate,
-  authorize("ADMIN"),
-  controller.getAllGenres
-);
+adminRouter.post("/login", controller.adminLogin); // Specific admin login endpoint
 
-router.get(
-  "/api/director",
-  authenticate,
-  authorize("ADMIN"),
-  controller.getAllDirectors
-);
+// Movie Management Routes
+adminRouter.post("/movies", controller.createMovie); // Create movie (admin only)
+adminRouter.get("/movies", controller.getMovies); // Get all movies with search/pagination/sorting (admin only)
+adminRouter.get("/movies/:movieId", controller.getMovieById); // Get a single movie by ID (admin only)
+adminRouter.patch("/movies/:movieId", controller.updateMovie); // Update movie (admin only)
+adminRouter.delete("/movies/:movieId", controller.deleteMovie); // Delete movie (admin only)
 
-router.get(
-  "/api/movies",
-  authenticate,
-  authorize("ADMIN"),
-  controller.getAllMovies
-);
+adminRouter.get("/genre", controller.getAllGenres); // Get all genres (admin only)
+adminRouter.get("/director", controller.getAllDirectors); // Get all directors (admin only)
+adminRouter.get("/dashboard", controller.getCombinedDashboardData); // Get dashboard data (admin only)
 
-router.get(
-  "/api/admin/dashboard",
-  authenticate,
-  authorize("ADMIN"),
-  controller.getEntryAnalytics
-);
+// Admin User Management Routes
+adminRouter.get("/users", controller.getUsers); // Get all users with search/pagination
+adminRouter.patch("/users/:userId", controller.updateUserRole); // Update user role
+adminRouter.delete("/users/:userId", controller.deleteUser); // Delete user
+
+// Mount the admin router
+router.use("/api/admin", adminRouter);
 
 module.exports = router;

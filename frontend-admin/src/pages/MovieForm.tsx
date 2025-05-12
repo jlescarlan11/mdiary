@@ -1,395 +1,509 @@
-// MovieForm.tsx
-import { useEffect, useState } from "react";
-import axios, { AxiosError } from "axios";
+import React, { useEffect, useState } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { toast } from "react-hot-toast";
+import { LuTrash, LuPlus } from "react-icons/lu";
 
-interface MovieFormData {
-  title: string;
-  year: string;
-  duration: string;
-  description: string;
-  posterUrl: string;
-}
-
+// --- Interfaces ---
 interface Director {
   id?: string;
   firstName: string;
   lastName: string;
 }
 
-// Add onSuccess prop to notify parent when creation succeeds
-interface MovieFormProps {
-  onSuccess?: () => void;
+interface Genre {
+  id?: string;
+  name: string;
 }
 
-export default function MovieForm({ onSuccess }: MovieFormProps) {
-  // --- Form state ---
-  const [formData, setFormData] = useState<MovieFormData>({
-    title: "",
-    year: "",
-    duration: "",
-    description: "",
-    posterUrl: "",
+interface EditableMovieData {
+  id?: string; // Optional for adding
+  title: string;
+  year: number;
+  duration: number;
+  description: string;
+  posterUrl: string;
+  genres: Genre[];
+  directors: Director[];
+}
+
+interface MovieFormProps {
+  movieToEdit: EditableMovieData | null;
+  onSuccess: (movieData: EditableMovieData) => Promise<void>;
+  onCancel: () => void;
+  availableGenres: Genre[];
+  availableDirectors: Director[];
+}
+
+// --- MovieForm Component ---
+const MovieForm: React.FC<MovieFormProps> = ({
+  movieToEdit,
+  onSuccess,
+  onCancel,
+  availableGenres,
+  availableDirectors,
+}) => {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+    register,
+  } = useForm<EditableMovieData>({
+    defaultValues: movieToEdit || {
+      title: "",
+      year: 0,
+      duration: 0,
+      description: "",
+      posterUrl: "",
+      genres: [],
+      directors: [],
+    },
   });
 
-  // --- Genre & Director lists ---
-  const [availableGenres, setAvailableGenres] = useState<string[]>([]);
-  const [availableDirectors, setAvailableDirectors] = useState<Director[]>([]);
-
-  // --- Selected & new items ---
-  const [genres, setGenres] = useState<string[]>([]);
-  const [directors, setDirectors] = useState<Director[]>([]);
-  const [newGenre, setNewGenre] = useState("");
-  const [newDirector, setNewDirector] = useState<Director>({
-    firstName: "",
-    lastName: "",
+  const {
+    fields: genreFields,
+    append: appendGenre,
+    remove: removeGenre,
+  } = useFieldArray({
+    control,
+    name: "genres",
   });
 
-  // --- UI toggles & status ---
-  const [showGenreInput, setShowGenreInput] = useState(false);
-  const [showDirectorInput, setShowDirectorInput] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const {
+    fields: directorFields,
+    append: appendDirector,
+    remove: removeDirector,
+  } = useFieldArray({
+    control,
+    name: "directors",
+  });
 
-  // Fetch existing genres & directors on mount
   useEffect(() => {
-    const fetchOptions = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const [genreRes, directorRes] = await Promise.all([
-          axios.get<{ name: string }[]>(import.meta.env.VITE_GET_GENRES_URL!, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get<Director[]>(import.meta.env.VITE_GET_DIRECTORS_URL!, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        setAvailableGenres(
-          Array.isArray(genreRes.data) ? genreRes.data.map((g) => g.name) : []
-        );
-        setAvailableDirectors(
-          Array.isArray(directorRes.data) ? directorRes.data : []
-        );
-      } catch (err) {
-        console.error("Error fetching genres/directors:", err);
+    reset(
+      movieToEdit || {
+        title: "",
+        year: 0,
+        duration: 0,
+        description: "",
+        posterUrl: "",
+        genres: [],
+        directors: [],
       }
-    };
-    fetchOptions();
-  }, []);
+    );
+  }, [movieToEdit, reset]);
 
-  // Handle typed input change
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    setFormData((fd) => ({ ...fd, [e.target.name]: e.target.value }));
-  };
-
-  // --- Genre handlers ---
-  const handleGenreSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    if (val === "__add_new__") {
-      setShowGenreInput(true);
-    } else if (val && !genres.includes(val)) {
-      setGenres((g) => [...g, val]);
-    }
-    e.target.value = "";
-  };
-
-  const addNewGenre = () => {
-    const trimmed = newGenre.trim();
-    if (trimmed && !genres.includes(trimmed)) {
-      setGenres((g) => [...g, trimmed]);
-      if (!availableGenres.includes(trimmed)) {
-        setAvailableGenres((ag) => [...ag, trimmed]);
-      }
-      setNewGenre("");
-      setShowGenreInput(false);
-    }
-  };
-
-  const removeGenre = (idx: number) =>
-    setGenres((g) => g.filter((_, i) => i !== idx));
-
-  // --- Director handlers ---
-  const handleDirectorSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    if (val === "__add_new__") {
-      setShowDirectorInput(true);
-    } else if (val !== "") {
-      const idx = parseInt(val, 10);
-      const sel = availableDirectors[idx];
-      if (
-        sel &&
-        !directors.some(
-          (d) => d.firstName === sel.firstName && d.lastName === sel.lastName
-        )
-      ) {
-        setDirectors((d) => [...d, sel]);
-      }
-    }
-    e.target.value = "";
-  };
-
-  const addNewDirector = () => {
-    const { firstName, lastName } = newDirector;
-    if (firstName.trim() && lastName.trim()) {
-      setDirectors((d) => [...d, { ...newDirector }]);
-      setAvailableDirectors((ad) => [...ad, { ...newDirector }]);
-      setNewDirector({ firstName: "", lastName: "" });
-      setShowDirectorInput(false);
-    }
-  };
-
-  const removeDirector = (idx: number) =>
-    setDirectors((d) => d.filter((_, i) => i !== idx));
-
-  // --- Form submit ---
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
+  const onSubmit = async (data: EditableMovieData) => {
     try {
-      const payload = {
-        ...formData,
-        year: parseInt(formData.year, 10),
-        duration: parseInt(formData.duration, 10),
-        genres,
-        directors,
-      };
-      const token = localStorage.getItem("token");
-      const res = await axios.post(
-        import.meta.env.VITE_CREATE_MOVIE_URL!,
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await onSuccess(data);
+    } catch (error) {
+      console.error("Form submission error:", error);
+    }
+  };
 
-      if (res.status === 201) {
-        // reset
-        setFormData({
-          title: "",
-          year: "",
-          duration: "",
-          description: "",
-          posterUrl: "",
-        });
-        setGenres([]);
-        setDirectors([]);
-        setNewGenre("");
-        setNewDirector({ firstName: "", lastName: "" });
-        setShowGenreInput(false);
-        setShowDirectorInput(false);
-        alert("Movie created successfully!");
-        // call parent callback to re-fetch
-        onSuccess?.();
+  // State for new genre/director inputs
+  const [newGenreName, setNewGenreName] = useState("");
+  const [newDirectorFirstName, setNewDirectorFirstName] = useState("");
+  const [newDirectorLastName, setNewDirectorLastName] = useState("");
+
+  // Handle adding a genre (from input or select)
+  const handleAddGenre = (genre: Genre) => {
+    // Check if genre already exists in the form's genre list
+    const genreExists = genreFields.some(
+      (field) => field.name.toLowerCase() === genre.name.toLowerCase()
+    );
+    if (genreExists) {
+      toast.error("Genre already added.");
+      return;
+    }
+    appendGenre(genre);
+  };
+
+  // Handle adding a director (from input or select)
+  const handleAddDirector = (director: Director) => {
+    // Check if director already exists in the form's director list
+    const directorExists = directorFields.some(
+      (field) =>
+        field.firstName.toLowerCase() === director.firstName.toLowerCase() &&
+        field.lastName.toLowerCase() === director.lastName.toLowerCase()
+    );
+    if (directorExists) {
+      toast.error("Director already added.");
+      return;
+    }
+    appendDirector(director);
+  };
+
+  // Handle adding a new genre from the input field
+  const handleAddNewGenreFromInput = () => {
+    if (newGenreName.trim()) {
+      handleAddGenre({ name: newGenreName.trim() }); // Add with just name, backend will create
+      setNewGenreName(""); // Clear input
+    }
+  };
+
+  // Handle adding a new director from the input fields
+  const handleAddNewDirectorFromInput = () => {
+    if (newDirectorFirstName.trim() && newDirectorLastName.trim()) {
+      handleAddDirector({
+        firstName: newDirectorFirstName.trim(),
+        lastName: newDirectorLastName.trim(),
+      }); // Add with just names, backend will create
+      setNewDirectorFirstName(""); // Clear input
+      setNewDirectorLastName(""); // Clear input
+    }
+  };
+
+  // Handle selecting an existing genre from the dropdown
+  const handleSelectExistingGenre = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const genreId = e.target.value;
+    if (genreId) {
+      // Check if a valid option (not the placeholder) is selected
+      const selectedGenre = availableGenres.find(
+        (genre) => genre.id === genreId
+      );
+      if (selectedGenre) {
+        handleAddGenre(selectedGenre);
       }
-    } catch (err) {
-      if (err instanceof AxiosError) {
-        setError(err.response?.data?.error || "Failed to create movie");
-      } else {
-        setError("An unexpected error occurred");
+      e.target.value = ""; // Reset select value to placeholder
+    }
+  };
+
+  // Handle selecting an existing director from the dropdown
+  const handleSelectExistingDirector = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const directorId = e.target.value;
+    if (directorId) {
+      // Check if a valid option (not the placeholder) is selected
+      const selectedDirector = availableDirectors.find(
+        (director) => director.id === directorId
+      );
+      if (selectedDirector) {
+        handleAddDirector(selectedDirector);
       }
-    } finally {
-      setLoading(false);
+      e.target.value = ""; // Reset select value to placeholder
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
-      <h1 className="text-3xl font-semibold mb-6">Create New Movie</h1>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* Title */}
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text text-base-content">Title</span>
+        </label>
+        <input
+          type="text"
+          placeholder="Movie Title"
+          className={`input input-bordered w-full ${
+            errors.title ? "input-error" : ""
+          }`}
+          {...register("title", { required: "Title is required" })}
+          aria-invalid={errors.title ? "true" : "false"}
+        />
+        {errors.title && (
+          <p role="alert" className="text-error text-sm mt-1">
+            {errors.title.message}
+          </p>
+        )}
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Title */}
-        <div>
-          <label className="block font-medium">Title</label>
+      {/* Year and Duration (side-by-side on larger screens) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Year */}
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text text-base-content">Year</span>
+          </label>
           <input
-            name="title"
+            type="number"
+            placeholder="Year"
+            className={`input input-bordered w-full ${
+              errors.year ? "input-error" : ""
+            }`}
+            {...register("year", {
+              required: "Year is required",
+              min: { value: 1888, message: "Year must be valid" },
+              max: {
+                value: new Date().getFullYear(),
+                message: "Year cannot be in the future",
+              },
+              valueAsNumber: true,
+            })}
+            aria-invalid={errors.year ? "true" : "false"}
+          />
+          {errors.year && (
+            <p role="alert" className="text-error text-sm mt-1">
+              {errors.year.message}
+            </p>
+          )}
+        </div>
+
+        {/* Duration */}
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text text-base-content">Duration (min)</span>
+          </label>
+          <input
+            type="number"
+            placeholder="Duration"
+            className={`input input-bordered w-full ${
+              errors.duration ? "input-error" : ""
+            }`}
+            {...register("duration", {
+              required: "Duration is required",
+              min: { value: 1, message: "Duration must be positive" },
+              valueAsNumber: true,
+            })}
+            aria-invalid={errors.duration ? "true" : "false"}
+          />
+          {errors.duration && (
+            <p role="alert" className="text-error text-sm mt-1">
+              {errors.duration.message}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Description */}
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text text-base-content">Description</span>
+        </label>
+        <textarea
+          placeholder="Movie Description"
+          className={`textarea textarea-bordered w-full ${
+            errors.description ? "textarea-error" : ""
+          }`}
+          {...register("description", { required: "Description is required" })}
+          aria-invalid={errors.description ? "true" : "false"}
+        ></textarea>
+        {errors.description && (
+          <p role="alert" className="text-error text-sm mt-1">
+            {errors.description.message}
+          </p>
+        )}
+      </div>
+
+      {/* Poster URL */}
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text text-base-content">Poster URL</span>
+        </label>
+        <input
+          type="text"
+          placeholder="https://example.com/poster.jpg"
+          className={`input input-bordered w-full ${
+            errors.posterUrl ? "input-error" : ""
+          }`}
+          {...register("posterUrl", {
+            required: "Poster URL is required",
+            pattern: {
+              value: /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/, // Basic URL pattern
+              message: "Please enter a valid URL",
+            },
+          })}
+          aria-invalid={errors.posterUrl ? "true" : "false"}
+        />
+        {errors.posterUrl && (
+          <p role="alert" className="text-error text-sm mt-1">
+            {errors.posterUrl.message}
+          </p>
+        )}
+      </div>
+
+      {/* Genres */}
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text text-base-content">Genres</span>
+        </label>
+        {/* Input for adding new genres */}
+        <div className="flex flex-col md:flex-row gap-2 mb-2">
+          <input
             type="text"
-            value={formData.title}
-            onChange={handleInputChange}
-            className="w-full input mt-1"
-            required
+            placeholder="Add new genre"
+            className="input input-bordered input-sm flex-grow text-base-content"
+            value={newGenreName}
+            onChange={(e) => setNewGenreName(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddNewGenreFromInput();
+              }
+            }}
+            aria-label="Add new genre"
           />
-        </div>
-
-        {/* Year & Duration */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block font-medium">Year</label>
-            <input
-              name="year"
-              type="number"
-              value={formData.year}
-              onChange={handleInputChange}
-              className="w-full input mt-1"
-              required
-            />
-          </div>
-          <div>
-            <label className="block font-medium">Duration (min)</label>
-            <input
-              name="duration"
-              type="number"
-              value={formData.duration}
-              onChange={handleInputChange}
-              className="w-full input mt-1"
-              required
-            />
-          </div>
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="block font-medium">Description</label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleInputChange}
-            rows={4}
-            className="w-full textarea mt-1"
-            required
-          />
-        </div>
-
-        {/* Poster URL */}
-        <div>
-          <label className="block font-medium">Poster URL</label>
-          <input
-            name="posterUrl"
-            type="url"
-            value={formData.posterUrl}
-            onChange={handleInputChange}
-            className="w-full input mt-1"
-            required
-          />
-        </div>
-
-        {/* Genres */}
-        <div>
-          <label className="block font-medium">Genres</label>
-          <select onChange={handleGenreSelect} className="select w-full mt-1">
-            <option value="">Select genre</option>
-            {availableGenres.map((g, i) => (
-              <option key={i} value={g}>
-                {g}
-              </option>
-            ))}
-            <option value="__add_new__">+ Add New Genre</option>
-          </select>
-
-          {showGenreInput && (
-            <div className="flex gap-2 mt-2">
-              <input
-                type="text"
-                className="input flex-1"
-                placeholder="New genre"
-                value={newGenre}
-                onChange={(e) => setNewGenre(e.target.value)}
-              />
-              <button type="button" className="btn" onClick={addNewGenre}>
-                Add
-              </button>
-            </div>
-          )}
-
-          {genres.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {genres.map((g, i) => (
-                <span key={i} className="badge">
-                  {g}{" "}
-                  <button
-                    type="button"
-                    onClick={() => removeGenre(i)}
-                    className="ml-1"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Directors */}
-        <div>
-          <label className="block font-medium">Directors</label>
-          <select
-            onChange={handleDirectorSelect}
-            className="select w-full mt-1"
+          <button
+            type="button"
+            className="btn btn-primary btn-sm md:w-auto"
+            onClick={handleAddNewGenreFromInput}
+            aria-label="Add genre"
           >
-            <option value="">Select director</option>
-            {availableDirectors.map((d, i) => (
-              <option key={i} value={i}>
-                {d.firstName} {d.lastName}
-              </option>
-            ))}
-            <option value="__add_new__">+ Add New Director</option>
+            <LuPlus className="h-4 w-4" />
+          </button>
+          {/* Select for existing genres */}
+          <select
+            className="select select-bordered select-sm flex-grow md:flex-none md:w-auto text-base-content"
+            onChange={handleSelectExistingGenre}
+            value="" // Reset value after selection
+            aria-label="Select existing genre"
+          >
+            <option value="">Select existing genre</option>
+            {availableGenres.map(
+              (genre) =>
+                // Only show genres not already added to the form
+                !genreFields.some((field) => field.id === genre.id) && (
+                  <option key={genre.id} value={genre.id}>
+                    {genre.name}
+                  </option>
+                )
+            )}
           </select>
-
-          {showDirectorInput && (
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              <input
-                type="text"
-                className="input"
-                placeholder="First name"
-                value={newDirector.firstName}
-                onChange={(e) =>
-                  setNewDirector((nd) => ({
-                    ...nd,
-                    firstName: e.target.value,
-                  }))
-                }
-              />
-              <input
-                type="text"
-                className="input"
-                placeholder="Last name"
-                value={newDirector.lastName}
-                onChange={(e) =>
-                  setNewDirector((nd) => ({
-                    ...nd,
-                    lastName: e.target.value,
-                  }))
-                }
-              />
-              <button
-                type="button"
-                className="btn col-span-2"
-                onClick={addNewDirector}
-              >
-                Add Director
-              </button>
-            </div>
-          )}
-
-          {directors.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {directors.map((d, i) => (
-                <span key={i} className="badge">
-                  {d.firstName} {d.lastName}{" "}
-                  <button
-                    type="button"
-                    onClick={() => removeDirector(i)}
-                    className="ml-1"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
+        {/* Display selected genres with remove button */}
+        {genreFields.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {genreFields.map((field, index) => (
+              <span
+                key={field.id || field.name}
+                className="badge badge-primary text-primary-content"
+              >
+                {field.name}
+                <button
+                  type="button"
+                  onClick={() => removeGenre(index)}
+                  className="ml-1 text-primary-content hover:text-white"
+                  aria-label={`Remove genre ${field.name}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {errors.genres && (
+          <p role="alert" className="text-error text-sm mt-1">
+            {errors.genres.message as string}
+          </p>
+        )}
+      </div>
 
-        {/* Submit */}
+      {/* Directors */}
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text text-base-content">Directors</span>
+        </label>
+        {/* Inputs for adding new directors */}
+        <div className="flex flex-col md:flex-row gap-2 mb-2">
+          <input
+            type="text"
+            placeholder="First Name"
+            className="input input-bordered input-sm flex-grow text-base-content"
+            value={newDirectorFirstName}
+            onChange={(e) => setNewDirectorFirstName(e.target.value)}
+            aria-label="Director first name"
+          />
+          <input
+            type="text"
+            placeholder="Last Name"
+            className="input input-bordered input-sm flex-grow text-base-content"
+            value={newDirectorLastName}
+            onChange={(e) => setNewDirectorLastName(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddNewDirectorFromInput();
+              }
+            }}
+            aria-label="Director last name"
+          />
+          <button
+            type="button"
+            className="btn btn-primary btn-sm md:w-auto"
+            onClick={handleAddNewDirectorFromInput}
+            aria-label="Add director"
+          >
+            <LuPlus className="h-4 w-4" />
+          </button>
+          {/* Select for existing directors */}
+          <select
+            className="select select-bordered select-sm flex-grow md:flex-none md:w-auto text-base-content"
+            onChange={handleSelectExistingDirector}
+            value="" // Reset value after selection
+            aria-label="Select existing director"
+          >
+            <option value="">Select existing director</option>
+            {availableDirectors.map(
+              (director) =>
+                // Only show directors not already added to the form
+                !directorFields.some((field) => field.id === director.id) && (
+                  <option key={director.id} value={director.id}>
+                    {director.firstName} {director.lastName}
+                  </option>
+                )
+            )}
+          </select>
+        </div>
+        {/* Display selected directors with remove button */}
+        {directorFields.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {directorFields.map((field, index) => (
+              <span
+                key={field.id || `${field.firstName}-${field.lastName}`}
+                className="badge badge-secondary text-secondary-content"
+              >
+                {field.firstName} {field.lastName}
+                <button
+                  type="button"
+                  onClick={() => removeDirector(index)}
+                  className="ml-1 text-secondary-content hover:text-white"
+                  aria-label={`Remove director ${field.firstName} ${field.lastName}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {errors.directors && (
+          <p role="alert" className="text-error text-sm mt-1">
+            {errors.directors.message as string}
+          </p>
+        )}
+      </div>
+
+      {/* Form Actions */}
+      <div className="modal-action">
+        {/* Cancel button */}
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={onCancel}
+          disabled={isSubmitting}
+          aria-label="Cancel"
+        >
+          Cancel
+        </button>
+        {/* Submit button */}
         <button
           type="submit"
-          disabled={loading}
-          className="btn btn-primary w-full mt-4"
+          className="btn btn-primary"
+          disabled={isSubmitting}
+          aria-label={movieToEdit ? "Save Changes" : "Create Movie"}
         >
-          {loading ? "Submitting..." : "Create Movie"}
+          {isSubmitting ? (
+            <span className="loading loading-spinner loading-sm"></span>
+          ) : movieToEdit ? (
+            "Save Changes"
+          ) : (
+            "Create Movie"
+          )}
         </button>
-      </form>
-    </div>
+      </div>
+    </form>
   );
-}
+};
+
+export default MovieForm;

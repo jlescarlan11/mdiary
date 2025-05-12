@@ -28,7 +28,10 @@ const Navbar: React.FC<NavbarProps> = ({ children }) => {
           {children}
           {isAuthenticated() ? (
             <>
-              <Link to="/movie" className="btn btn-sm btn-ghost">
+              <Link to="/" className="btn btn-sm btn-ghost">
+                Dashboard
+              </Link>
+              <Link to="/movies" className="btn btn-sm btn-ghost">
                 Movie
               </Link>
               <button onClick={handleLogout} className="btn btn-sm btn-outline">
