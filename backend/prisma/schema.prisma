@@ -14,18 +14,19 @@ enum Role {
 }
 
 model User {
-  id         String       @id @default(uuid())
-  username   String       @unique @db.VarChar(50)
-  email      String       @unique @db.VarChar(255)
-  password   String       @db.VarChar(255)
-  photoUrl   String?      @map("photo_url")
-  role       Role         @default(USER)
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
-  DiaryEntry DiaryEntry[]
-  followers  UserFollow[] @relation("follower")
-  following  UserFollow[] @relation("followee")
-  EntryLike  EntryLike[]
+  id          String        @id @default(uuid())
+  username    String        @unique @db.VarChar(50)
+  email       String        @unique @db.VarChar(255)
+  password    String        @db.VarChar(255)
+  photoUrl    String?       @map("photo_url")
+  role        Role          @default(USER)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  DiaryEntry  DiaryEntry[]
+  followers   UserFollow[]  @relation("follower")
+  following   UserFollow[]  @relation("followee")
+  EntryLike   EntryLike[]
+  ActivityLog ActivityLog[] // Added relation to ActivityLog
 
   @@index([email])
   @@map("users")
@@ -150,4 +151,18 @@ model EntryLike {
   @@id([userId, diaryEntryId])
   @@index([diaryEntryId])
   @@map("entry_likes")
+}
+
+// Added ActivityLog model
+model ActivityLog {
+  id        String   @id @default(uuid())
+  type      String // e.g., "USER_LOGIN", "MOVIE_CREATED", "DIARY_ENTRY_ADDED"
+  details   String? // Optional details about the activity
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @map("user_id")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
 }

@@ -9,6 +9,7 @@ import ThemeSwitcher from "./components/ThemeSwitcher";
 import { isAuthenticated } from "./auth";
 
 import Movies from "./pages/Movies";
+import UserManagement from "./pages/UserManagement";
 
 interface RouteProps {
   children: React.ReactNode;
@@ -79,6 +80,15 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <Movies />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/user"
+            element={
+              <ProtectedRoute>
+                <UserManagement />
               </ProtectedRoute>
             }
           />
