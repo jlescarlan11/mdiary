@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 import {
   XAxis,
   YAxis,
@@ -9,27 +9,27 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import MovieForm from "./MovieForm"; // Use MovieForm for modal usage
-import { toast } from "react-hot-toast"; // Import toast and Toaster
+// Corrected: Import EditableMovieData as a default import
+import MovieForm, { type EditableMovieData } from "./MovieForm";
+import { toast } from "react-hot-toast";
 import {
   LuPencil,
   LuTrash,
   LuArrowUp,
   LuArrowDown,
   LuRefreshCw,
-} from "react-icons/lu"; // Import icons for actions, sorting, and refresh
-import Swal from "sweetalert2"; // Import SweetAlert2 for confirmation dialogs
+} from "react-icons/lu";
+import Swal from "sweetalert2";
 
 // --- Component Interfaces ---
-// Simplified Director and Genre interfaces to match the data returned by the updated query.movie.getMovies
 interface Director {
-  id?: string; // id is optional as it might not exist for new directors
+  id?: string;
   firstName: string;
   lastName: string;
 }
 
 interface Genre {
-  id?: string; // id is optional as it might not exist for new genres
+  id?: string;
   name: string;
 }
 
@@ -42,32 +42,20 @@ interface Movie {
   posterUrl: string;
   createdAt: string;
   updatedAt: string;
-  directors: Director[]; // Simplified structure
-  genres: Genre[]; // Simplified structure
-  entriesCount: number; // From _count.DiaryEntry
-  averageRating: number;
-}
-
-// Define the structure for movie data when adding/editing
-interface EditableMovieData {
-  id?: string; // Optional for adding
-  title: string;
-  year: number;
-  duration: number;
-  description: string;
-  posterUrl: string;
-  genres: Genre[];
   directors: Director[];
+  genres: Genre[];
+  entriesCount: number;
+  averageRating: number;
 }
 
 // Define props interface for MovieFormModal
 interface MovieFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void; // This will be called after successful form submission
-  movieToEdit: EditableMovieData | null; // Pass movie data for editing (or null for add)
-  availableGenres: Genre[]; // Pass available genres to modal
-  availableDirectors: Director[]; // Pass available directors to modal
+  onSuccess: () => void;
+  movieToEdit: EditableMovieData | null;
+  availableGenres: Genre[];
+  availableDirectors: Director[];
   onAddMovie: (movieData: EditableMovieData) => Promise<void>;
   onUpdateMovie: (movieData: EditableMovieData) => Promise<void>;
 }
@@ -79,11 +67,9 @@ const TotalMoviesCard: React.FC<{ count: number; loading: boolean }> = ({
   count,
   loading,
 }) => (
-  // Updated card styling with base-100 background and shadow
   <div className="card bg-base-100 p-4 shadow rounded-lg border border-base-300">
     <h2 className="text-xl font-semibold text-base-content">Total Movies</h2>
-    <p className="text-3xl mt-2 text-primary">{loading ? "..." : count}</p>{" "}
-    {/* Use primary color for count */}
+    <p className="text-3xl mt-2 text-primary">{loading ? "..." : count}</p>
   </div>
 );
 
@@ -106,25 +92,27 @@ const GenresChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         />
         <XAxis
           dataKey="name"
-          className="stroke-neutral"
+          className="fill-base-content"
           angle={-45}
           textAnchor="end"
           tick={{ fontSize: 12 }}
         />
-        <YAxis className="stroke-neutral" />
+        <YAxis className="fill-base-content" />
         <Tooltip
-          // className="bg-accent"
-          labelClassName="bg-base-100"
           contentStyle={{
-            backgroundColor: "",
-            borderColor: "",
-            color: "",
+            backgroundColor: "hsl(var(--b1) / 0.8)",
+            borderColor: "hsl(var(--b3))",
+            borderRadius: "var(--rounded-btn, 0.5rem)",
+            color: "hsl(var(--bc))",
+            backdropFilter: "blur(2px)",
           }}
+          labelClassName="font-semibold text-base-content"
         />
         <Line
           type="monotone"
           dataKey="count"
-          className=""
+          stroke="hsl(var(--p))"
+          strokeWidth={2}
           dot={{
             className: "fill-primary stroke-2 stroke-primary",
             r: 5,
@@ -158,27 +146,29 @@ const DirectorsChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         />
         <XAxis
           dataKey="name"
-          className="stroke-neutral"
+          className="fill-base-content"
           angle={-45}
           textAnchor="end"
           tick={{ fontSize: 12 }}
         />
-        <YAxis className="stroke-neutral" />
+        <YAxis className="fill-base-content" />
         <Tooltip
-          // className="bg-accent"
-          labelClassName="bg-base-100"
           contentStyle={{
-            backgroundColor: "",
-            borderColor: "",
-            color: "",
+            backgroundColor: "hsl(var(--b1) / 0.8)",
+            borderColor: "hsl(var(--b3))",
+            borderRadius: "var(--rounded-btn, 0.5rem)",
+            color: "hsl(var(--bc))",
+            backdropFilter: "blur(2px)",
           }}
+          labelClassName="font-semibold text-base-content"
         />
         <Line
           type="monotone"
           dataKey="count"
-          className=""
+          stroke="hsl(var(--s))"
+          strokeWidth={2}
           dot={{
-            className: "fill-primary stroke-2 stroke-primary",
+            className: "fill-secondary stroke-2 stroke-secondary",
             r: 5,
           }}
           activeDot={{
@@ -199,7 +189,7 @@ const MovieListTable: React.FC<{
   sortDirection: "asc" | "desc" | null;
   onSort: (column: keyof Movie) => void;
   onDelete: (movieId: string) => void;
-  onEditClick: (movie: Movie) => void; // Handler to signal edit click
+  onEditClick: (movie: Movie) => void;
 }> = ({
   movies,
   loading,
@@ -221,8 +211,7 @@ const MovieListTable: React.FC<{
         </div>
       )}
 
-      {/* Table view for medium and larger screens */}
-      <div className="overflow-x-auto hidden md:block">
+      <div className="overflow-x-auto">
         <table className="table w-full">
           <thead className="sticky top-0 bg-base-300 text-base-content shadow-sm">
             <tr>
@@ -324,53 +313,6 @@ const MovieListTable: React.FC<{
           </tbody>
         </table>
       </div>
-
-      {/* Card view for small screens */}
-      <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
-        {movies.map((m) => (
-          <div
-            key={m.id}
-            className="card bg-base-100 p-4 shadow rounded-lg border border-base-300"
-          >
-            <h3 className="text-lg font-semibold text-base-content">
-              {m.title} ({m.year})
-            </h3>
-            <p className="text-base-content text-sm">
-              Duration: {m.duration} min
-            </p>
-            <p className="text-base-content text-sm">
-              Rating: {m.averageRating.toFixed(1)}
-            </p>
-            <p className="text-base-content text-sm">
-              Genres: {m.genres.map((g) => g.name).join(", ")}
-            </p>
-            <p className="text-base-content text-sm">
-              Directors:{" "}
-              {m.directors
-                .map((d) => `${d.firstName} ${d.lastName}`)
-                .join(", ")}
-            </p>
-            <div className="mt-4 card-actions justify-end">
-              <button
-                className="btn btn-ghost btn-sm text-primary"
-                aria-label={`Edit ${m.title}`}
-                title={`Edit ${m.title}`}
-                onClick={() => onEditClick(m)}
-              >
-                <LuPencil className="h-4 w-4" />
-              </button>
-              <button
-                className="btn btn-ghost btn-sm text-error"
-                aria-label={`Delete ${m.title}`}
-                title={`Delete ${m.title}`}
-                onClick={() => onDelete(m.id)}
-              >
-                <LuTrash className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };
@@ -386,19 +328,15 @@ const MovieFormModal: React.FC<MovieFormModalProps> = ({
   onAddMovie,
   onUpdateMovie,
 }) => {
-  // Basic focus trap implementation (could be enhanced with a library)
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Move useEffect for Escape key and focus trap outside the conditional render
   useEffect(() => {
     if (isOpen) {
-      // Focus the first focusable element in the modal when it opens
       const firstFocusableElement = modalRef.current?.querySelector(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       ) as HTMLElement | null;
       firstFocusableElement?.focus();
 
-      // Add event listener for Escape key to close modal
       const handleEscape = (event: KeyboardEvent) => {
         if (event.key === "Escape") {
           onClose();
@@ -406,29 +344,29 @@ const MovieFormModal: React.FC<MovieFormModalProps> = ({
       };
       document.addEventListener("keydown", handleEscape);
 
-      // Clean up event listener on close
       return () => {
         document.removeEventListener("keydown", handleEscape);
       };
     }
   }, [isOpen, onClose]);
 
-  // Determine which handler to use based on whether movieToEdit is provided
-  const handleSubmit = async (movieData: EditableMovieData) => {
-    if (movieToEdit && movieData.id) {
-      // Ensure id exists for update
-      await onUpdateMovie(movieData);
-    } else {
-      await onAddMovie(movieData);
+  const onSubmitFromForm = async (movieData: EditableMovieData) => {
+    try {
+      if (movieToEdit && movieData.id) {
+        await onUpdateMovie(movieData);
+      } else {
+        await onAddMovie(movieData);
+      }
+      onSuccess();
+    } catch (error) {
+      console.error("Form submission error:", error);
+      throw error;
     }
-    // onSuccess is called after the API calls complete in the parent handlers
   };
 
-  // Only render the modal if it's open
   if (!isOpen) return null;
 
   return (
-    // DaisyUI Modal structure with updated backdrop and ref for focus trap
     <div
       className="modal modal-open"
       role="dialog"
@@ -438,13 +376,13 @@ const MovieFormModal: React.FC<MovieFormModalProps> = ({
     >
       <form
         method="dialog"
-        className="modal-backdrop fixed inset-0 z-0" // Removed bg-base-content bg-opacity-30
+        className="modal-backdrop fixed inset-0 z-0"
         onClick={onClose}
         aria-label="Close modal"
       >
-        <button></button> {/* Empty button for dialog closing */}
+        <button></button>
       </form>
-      <div className="modal-box bg-base-100 text-base-content max-w-2xl">
+      <div className="modal-box bg-base-100 text-base-content w-11/12 max-w-2xl">
         <h3 className="font-bold text-lg" id="modal-title">
           {movieToEdit ? "Edit Movie" : "Add New Movie"}
         </h3>
@@ -458,14 +396,13 @@ const MovieFormModal: React.FC<MovieFormModalProps> = ({
         <div className="py-4">
           <MovieForm
             movieToEdit={movieToEdit}
-            onSuccess={handleSubmit} // Pass the combined submit handler
+            onSuccess={onSubmitFromForm}
             onCancel={onClose}
             availableGenres={availableGenres}
             availableDirectors={availableDirectors}
           />
         </div>
       </div>
-      {/* Close modal on clicking outside - Removed dimming classes */}
     </div>
   );
 };
@@ -497,25 +434,20 @@ export default function AdminMovieDashboard() {
   const [topGenresDisplayed, setTopGenresDisplayed] = useState<
     { name: string; count: number }[]
   >([]);
-  // Corrected: Declared topDirectorsDisplayed as state with its setter
   const [topDirectorsDisplayed, setTopDirectorsDisplayed] = useState<
     { name: string; count: number }[]
   >([]);
 
-  // Ref for debouncing search input
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Use useCallback for fetchMovies to make it stable
   const fetchMovies = useCallback(
     async (forceApiFetch = false) => {
-      // Added forceApiFetch parameter
       setLoading(true);
       setError(null);
 
       const localStorageKey = `cachedMovies_${searchTerm}_${currentPage}_${itemsPerPage}_${sortColumn}_${sortDirection}`;
 
       if (!forceApiFetch) {
-        // Try to load from local storage first
         const cachedData = localStorage.getItem(localStorageKey);
         if (cachedData) {
           try {
@@ -526,10 +458,9 @@ export default function AdminMovieDashboard() {
             computeAnalytics(cachedMovies);
             setLoading(false);
             console.log("Loaded movies from local storage.");
-            return; // Use cached data and exit
+            return;
           } catch (e) {
             console.error("Error parsing cached data:", e);
-            // If parsing fails, proceed to fetch from API
           }
         }
       }
@@ -540,8 +471,6 @@ export default function AdminMovieDashboard() {
           setError("Authentication token not found. Please log in.");
           return;
         }
-        // Construct the API URL with search, pagination, and sorting parameters
-        // This uses import.meta.env which is the correct way in Vite
         const apiUrl = `${import.meta.env
           .VITE_GET_MOVIES_URL!}?search=${searchTerm}&page=${currentPage}&limit=${itemsPerPage}${
           sortColumn
@@ -560,7 +489,6 @@ export default function AdminMovieDashboard() {
         setTotalMoviesCount(totalMovies);
         computeAnalytics(movies);
 
-        // Store fetched data in local storage
         try {
           localStorage.setItem(
             localStorageKey,
@@ -569,7 +497,6 @@ export default function AdminMovieDashboard() {
           console.log("Cached movies in local storage.");
         } catch (e) {
           console.error("Error saving to local storage:", e);
-          // Continue even if local storage fails
         }
       } catch (err) {
         console.error("Error loading movies", err);
@@ -588,9 +515,8 @@ export default function AdminMovieDashboard() {
       }
     },
     [searchTerm, currentPage, itemsPerPage, sortColumn, sortDirection]
-  ); // Add dependencies
+  );
 
-  // Fetch available genres and directors once on mount
   useEffect(() => {
     const fetchOptions = async () => {
       try {
@@ -609,7 +535,6 @@ export default function AdminMovieDashboard() {
         );
       } catch (err) {
         console.error("Error fetching genres/directors:", err);
-        // Type assertion for err to be more specific with AxiosError
         if (axios.isAxiosError(err)) {
           toast.error(
             err.response?.data?.error ||
@@ -623,27 +548,22 @@ export default function AdminMovieDashboard() {
     fetchOptions();
   }, []);
 
-  // Effect to fetch movies when dependencies change (including debounced search)
   useEffect(() => {
-    // Clear previous debounce timeout
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
 
-    // Set a new debounce timeout
     debounceTimeoutRef.current = setTimeout(() => {
-      fetchMovies(); // Call fetchMovies with default forceApiFetch = false
-    }, 500); // 500ms debounce delay
+      fetchMovies();
+    }, 500);
 
-    // Cleanup function to clear timeout on unmount or dependency change
     return () => {
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [fetchMovies, searchTerm]); // Depend on fetchMovies and searchTerm
+  }, [fetchMovies, searchTerm]);
 
-  // Effect to reset page to 1 when search term changes (immediately, not debounced)
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -651,7 +571,8 @@ export default function AdminMovieDashboard() {
   const computeAnalytics = (data: Movie[]) => {
     const genreCount: Record<string, number> = {};
     data.forEach((m) => {
-      m.genres.forEach((g) => {
+      m.genres.forEach((g: Genre) => {
+        // Explicitly type 'g'
         const name = g.name;
         genreCount[name] = (genreCount[name] || 0) + 1;
       });
@@ -664,7 +585,8 @@ export default function AdminMovieDashboard() {
 
     const directorCount: Record<string, number> = {};
     data.forEach((m) => {
-      m.directors.forEach((d) => {
+      m.directors.forEach((d: Director) => {
+        // Explicitly type 'd'
         const name = `${d.firstName} ${d.lastName}`;
         directorCount[name] = (directorCount[name] || 0) + 1;
       });
@@ -676,7 +598,6 @@ export default function AdminMovieDashboard() {
     setTopDirectorsDisplayed(directorsArray);
   };
 
-  // Handler for sorting table columns
   const handleSort = (column: keyof Movie) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -684,23 +605,20 @@ export default function AdminMovieDashboard() {
       setSortColumn(column);
       setSortDirection("asc");
     }
-    setCurrentPage(1); // Reset to first page on sorting
+    setCurrentPage(1);
   };
 
-  // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
 
-  // Handle items per page change
   const handleItemsPerPageChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
     setItemsPerPage(Number(event.target.value));
-    setCurrentPage(1); // Reset to first page
+    setCurrentPage(1);
   };
 
-  // Handle updating a movie (called from MovieForm)
   const handleUpdateMovie = async (movieData: EditableMovieData) => {
     try {
       setLoading(true);
@@ -724,26 +642,22 @@ export default function AdminMovieDashboard() {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      // Force API fetch after successful update to ensure fresh data
       await fetchMovies(true);
       toast.success("Movie updated successfully!");
-      handleFormSuccess(); // Close modal
     } catch (err) {
       console.error("Error updating movie:", err);
+      let errorMessage = "Failed to update movie.";
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error || "Failed to update movie.");
-        toast.error(err.response?.data?.error || "Failed to update movie.");
-      } else {
-        setError("Failed to update movie. Please try again.");
-        toast.error("Failed to update movie.");
+        errorMessage = err.response?.data?.error || errorMessage;
       }
+      setError(errorMessage);
+      toast.error(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle adding a new movie (called from MovieForm)
   const handleAddMovie = async (movieData: EditableMovieData) => {
     try {
       setLoading(true);
@@ -767,26 +681,22 @@ export default function AdminMovieDashboard() {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      // Force API fetch after successful add to ensure fresh data
       await fetchMovies(true);
       toast.success("Movie added successfully!");
-      handleFormSuccess(); // Close modal
     } catch (err) {
       console.error("Error adding movie:", err);
+      let errorMessage = "Failed to add movie.";
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error || "Failed to add movie.");
-        toast.error(err.response?.data?.error || "Failed to add movie.");
-      } else {
-        setError("Failed to add movie. Please try again.");
-        toast.error("Failed to add movie.");
+        errorMessage = err.response?.data?.error || errorMessage;
       }
+      setError(errorMessage);
+      toast.error(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle deleting a movie
   const handleDeleteMovie = async (movieId: string) => {
     const result = await Swal.fire({
       title: "Are you sure?",
@@ -813,7 +723,6 @@ export default function AdminMovieDashboard() {
           }
         );
         toast.success("Movie deleted successfully!");
-        // Force API fetch after successful delete to ensure fresh data
         fetchMovies(true);
       } catch (err) {
         console.error("Error deleting movie", err);
@@ -833,56 +742,45 @@ export default function AdminMovieDashboard() {
     }
   };
 
-  // Handle successful movie addition/update from the modal form
   const handleFormSuccess = () => {
     setIsFormModalOpen(false);
     setEditingMovie(null);
   };
 
-  // Handle canceling movie addition/update from the modal form
   const handleFormCancel = () => {
     setIsFormModalOpen(false);
     setEditingMovie(null);
   };
 
-  // Handle explicit refresh button click
   const handleRefreshClick = () => {
-    fetchMovies(true); // Force API fetch
+    fetchMovies(true);
     toast.success("Refreshing movies...");
   };
 
   return (
-    <div className="container mx-auto p-6 bg-base-100 min-h-screen rounded-lg shadow-xl relative">
-      {/* Toaster for notifications - ideally placed at the root of your app */}
-      {/* <Toaster position="bottom-right" /> */}
-
+    <div className="container mx-auto p-4 md:p-6 bg-base-100 min-h-screen rounded-lg shadow-xl relative">
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b-2 border-primary pb-3 space-y-4 md:space-y-0">
-        <h1 className="text-4xl font-bold text-base-content">
+        <h1 className="text-2xl md:text-4xl font-bold text-base-content">
           Admin Movie Dashboard
         </h1>
         <div className="flex space-x-4">
-          {" "}
-          {/* Container for buttons */}
-          {/* Refresh Button */}
           <button
             className="btn btn-outline btn-primary shadow-md"
             onClick={handleRefreshClick}
             aria-label="Refresh Movie List"
-            disabled={loading} // Disable while loading
+            disabled={loading}
           >
             {loading ? (
               <span className="loading loading-spinner loading-sm"></span>
             ) : (
               <LuRefreshCw className="h-5 w-5" />
             )}
-            <span className="ml-2 hidden md:inline">Refresh</span>{" "}
-            {/* Text on larger screens */}
+            <span className="ml-2 hidden md:inline">Refresh</span>
           </button>
-          {/* Add New Movie Button */}
           <button
             className="btn btn-primary shadow-md"
             onClick={() => {
-              setEditingMovie(null); // Clear editing movie state for add
+              setEditingMovie(null);
               setIsFormModalOpen(true);
             }}
             aria-label="Add New Movie"
@@ -893,7 +791,6 @@ export default function AdminMovieDashboard() {
         </div>
       </div>
 
-      {/* Movie Form Modal (handles both Create and Edit) */}
       <MovieFormModal
         isOpen={isFormModalOpen}
         onClose={handleFormCancel}
@@ -927,7 +824,7 @@ export default function AdminMovieDashboard() {
           <span>{error}</span>
           <button
             className="btn btn-sm btn-error ml-4 shadow-md"
-            onClick={() => fetchMovies(true)} // Retry also forces API fetch
+            onClick={() => fetchMovies(true)}
           >
             Retry
           </button>
@@ -953,9 +850,11 @@ export default function AdminMovieDashboard() {
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <span className="text-base-content">Items per page:</span>
+            <span className="text-base-content text-sm md:text-base">
+              Items per page:
+            </span>
             <select
-              className="select select-bordered select-primary shadow-sm text-base-content"
+              className="select select-bordered select-primary select-sm md:select-md shadow-sm text-base-content"
               value={itemsPerPage}
               onChange={handleItemsPerPageChange}
               aria-label="Items per page"
@@ -968,18 +867,18 @@ export default function AdminMovieDashboard() {
           </div>
           <div className="join shadow-sm">
             <button
-              className="join-item btn btn-outline btn-primary"
+              className="join-item btn btn-outline btn-primary btn-sm md:btn-md"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
               aria-label="Previous page"
             >
               «
             </button>
-            <button className="join-item btn btn-outline border-primary text-primary pointer-events-none">
+            <button className="join-item btn btn-outline border-primary text-primary pointer-events-none btn-sm md:btn-md">
               Page {currentPage} of {Math.ceil(totalMoviesCount / itemsPerPage)}
             </button>
             <button
-              className="join-item btn btn-outline btn-primary"
+              className="join-item btn btn-outline btn-primary btn-sm md:btn-md"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={
                 currentPage === Math.ceil(totalMoviesCount / itemsPerPage) ||

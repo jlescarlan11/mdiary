@@ -5,11 +5,11 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import LogIn from "./pages/LogIn";
 import Dashboard from "./pages/Dashboard";
 import Navbar from "./components/Navbar";
-import ThemeSwitcher from "./components/ThemeSwitcher";
 import { isAuthenticated } from "./auth";
 
 import Movies from "./pages/Movies";
 import UserManagement from "./pages/UserManagement";
+// Sidebar is removed as per previous request
 
 interface RouteProps {
   children: React.ReactNode;
@@ -21,32 +21,47 @@ const ProtectedRoute: React.FC<RouteProps> = ({ children }) =>
 const PublicRoute: React.FC<RouteProps> = ({ children }) =>
   isAuthenticated() ? <Navigate to="/dashboard" replace /> : <>{children}</>;
 
+// Layout component - Simplified as sidebar is removed
 const Layout: React.FC = () => {
   const location = useLocation();
-  const hideNavbar = ["/login", "/signup"].includes(location.pathname);
+  // Hide navbar on login/signup pages
+  const hideLayout = ["/login", "/signup"].includes(location.pathname);
 
   useEffect(() => {
     const saved = localStorage.getItem("theme") || "light";
     document.documentElement.setAttribute("data-theme", saved);
   }, [location.pathname]);
 
+  if (hideLayout) {
+    return <Outlet />; // Render only the content for login/signup
+  }
+
   return (
-    <>
-      {!hideNavbar && (
-        <Navbar>
-          <ThemeSwitcher />
-        </Navbar>
+    // Main layout container - flex-col by default, no need for md:flex-row as sidebar is gone
+    <div className="min-h-screen flex flex-col">
+      {/* Top Navbar */}
+      {isAuthenticated() && ( // Show navbar only on protected routes
+        <Navbar />
       )}
-      <Outlet />
-    </>
+
+      {/* Page content - add responsive padding */}
+      {/* The padding is applied in the individual page components (Dashboard, Movies, UserManagement) */}
+      <main className="flex-1">
+        <Outlet />
+      </main>
+    </div>
   );
 };
 
 const App: React.FC = () => {
   return (
-    <div className="container mx-auto max-w-7xl">
+    // Removed container and max-w-7xl here.
+    // The layout and max-width should be managed within the main content areas of each page
+    // to allow the navbar and potentially full-width elements to span the viewport.
+    <div className="min-h-screen">
       <Routes>
         <Route element={<Layout />}>
+          {/* Redirect root to login or dashboard based on auth status */}
           <Route
             path="/"
             element={
@@ -57,6 +72,7 @@ const App: React.FC = () => {
               )
             }
           />
+          {/* Public routes */}
           <Route
             path="/login"
             element={
@@ -65,7 +81,10 @@ const App: React.FC = () => {
               </PublicRoute>
             }
           />
+          {/* Add a signup route placeholder if needed */}
+          {/* <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} /> */}
 
+          {/* Protected routes */}
           <Route
             path="/dashboard"
             element={
@@ -92,6 +111,11 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* Add other protected admin routes here */}
+          {/* <Route path="/reviews" element={<ProtectedRoute><Reviews /></ProtectedRoute>} /> */}
+          {/* <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} /> */}
+          {/* <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} /> */}
         </Route>
       </Routes>
     </div>

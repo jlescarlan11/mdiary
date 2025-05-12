@@ -3,7 +3,7 @@ import axios, { AxiosError } from "axios";
 import { useDebounce } from "use-debounce";
 import { format } from "date-fns";
 import { toast, Toaster } from "react-hot-toast";
-import { LuPencil, LuTrash } from "react-icons/lu"; // Import desired icons
+import { LuPencil, LuTrash, LuRefreshCw } from "react-icons/lu"; // Import desired icons
 
 // --- Interfaces ---
 interface User {
@@ -46,66 +46,109 @@ const useUsers = (
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalUsersCount, setTotalUsersCount] = useState(0); // Added totalUsersCount state
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchUsers = useCallback(
+    async (forceApiFetch = false) => {
+      // Added forceApiFetch parameter
+      setLoading(true);
+      setError(null);
 
-    if (!API_GET_USERS_URL) {
-      console.error("VITE_GET_ADMIN_USERS environment variable is not set.");
-      setError("API endpoint not configured.");
-      setLoading(false);
-      return;
-    }
+      if (!API_GET_USERS_URL) {
+        console.error("VITE_GET_ADMIN_USERS environment variable is not set.");
+        setError("API endpoint not configured.");
+        setLoading(false);
+        return;
+      }
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setError("Authentication token not found. Please log in as admin.");
-      setLoading(false);
-      // Consider redirecting to the admin login page here
-      // window.location.href = '/admin-login';
-      return;
-    }
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("Authentication token not found. Please log in as admin.");
+        setLoading(false);
+        // Consider redirecting to the admin login page here
+        // window.location.href = '/admin-login';
+        return;
+      }
 
-    try {
-      const response = await axios.get<UsersResponse>(API_GET_USERS_URL, {
-        params: {
-          search: debouncedSearchQuery,
-          page: currentPage,
-          limit: itemsPerPage,
-        },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // Local Storage Key based on search, page, and items per page
+      const localStorageKey = `cachedUsers_${debouncedSearchQuery}_${currentPage}_${itemsPerPage}`;
 
-      if (response.data && Array.isArray(response.data.users)) {
-        setUsers(response.data.users);
-        setTotalPages(Math.ceil(response.data.totalUsers / itemsPerPage));
-      } else {
-        console.error("API returned unexpected data format:", response.data);
-        setError("Received unexpected data format from the server.");
-        toast.error("Received unexpected data format from the server.");
+      if (!forceApiFetch) {
+        // Try to load from local storage first
+        const cachedData = localStorage.getItem(localStorageKey);
+        if (cachedData) {
+          try {
+            const parsedData: UsersResponse = JSON.parse(cachedData);
+            setUsers(parsedData.users);
+            setTotalPages(Math.ceil(parsedData.totalUsers / itemsPerPage));
+            setTotalUsersCount(parsedData.totalUsers); // Set total count from cache
+            setLoading(false);
+            console.log("Loaded users from local storage.");
+            return; // Use cached data and exit
+          } catch (e) {
+            console.error("Error parsing cached user data:", e);
+            // If parsing fails, proceed to fetch from API
+          }
+        }
+      }
+
+      try {
+        const response = await axios.get<UsersResponse>(API_GET_USERS_URL, {
+          params: {
+            search: debouncedSearchQuery,
+            page: currentPage,
+            limit: itemsPerPage,
+          },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.data && Array.isArray(response.data.users)) {
+          setUsers(response.data.users);
+          setTotalPages(Math.ceil(response.data.totalUsers / itemsPerPage));
+          setTotalUsersCount(response.data.totalUsers); // Set total count from API
+          // Store fetched data in local storage
+          try {
+            localStorage.setItem(
+              localStorageKey,
+              JSON.stringify(response.data)
+            );
+            console.log("Cached users in local storage.");
+          } catch (e) {
+            console.error("Error saving user data to local storage:", e);
+            // Continue even if local storage fails
+          }
+        } else {
+          console.error("API returned unexpected data format:", response.data);
+          setError("Received unexpected data format from the server.");
+          toast.error("Received unexpected data format from the server.");
+          setUsers([]);
+          setTotalPages(1);
+          setTotalUsersCount(0);
+        }
+      } catch (err) {
+        const axiosError = err as AxiosError<{ error?: string }>;
+        console.error("Error fetching users:", err);
+        setError(axiosError.response?.data?.error || "Failed to fetch users.");
+        toast.error(
+          axiosError.response?.data?.error || "Failed to fetch users."
+        );
         setUsers([]);
         setTotalPages(1);
+        setTotalUsersCount(0);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      const axiosError = err as AxiosError<{ error?: string }>;
-      console.error("Error fetching users:", err);
-      setError(axiosError.response?.data?.error || "Failed to fetch users.");
-      toast.error(axiosError.response?.data?.error || "Failed to fetch users.");
-      setUsers([]);
-      setTotalPages(1);
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearchQuery, currentPage, itemsPerPage]); // Dependencies for useCallback
+    },
+    [debouncedSearchQuery, currentPage, itemsPerPage]
+  ); // Dependencies for useCallback
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(); // Initial fetch
   }, [fetchUsers]); // Dependency for useEffect
 
-  return { users, loading, error, totalPages, fetchUsers };
+  return { users, loading, error, totalPages, totalUsersCount, fetchUsers }; // Return totalUsersCount
 };
 
 // --- Confirmation Modal Component ---
@@ -153,7 +196,8 @@ const ConfirmationModal: React.FC<{
 
   return (
     <div className="modal modal-open">
-      <div className="modal-box">
+      {/* Adjusted modal-box width for responsiveness */}
+      <div className="modal-box bg-base-100 text-base-content w-11/12 max-w-sm">
         <h3 className="font-bold text-lg text-base-content">Confirm Action</h3>
         <p className="py-4 text-base-content">{getMessage()}</p>
         <div className="modal-action">
@@ -185,11 +229,13 @@ const UserManagement: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Use the custom hook for data fetching and state
-  const { users, loading, error, totalPages, fetchUsers } = useUsers(
-    debouncedSearchQuery,
-    currentPage,
-    itemsPerPage
-  );
+  const { users, loading, error, totalPages, totalUsersCount, fetchUsers } =
+    useUsers(
+      // Get totalUsersCount
+      debouncedSearchQuery,
+      currentPage,
+      itemsPerPage
+    );
 
   // --- Assume you get the logged-in user's ID here ---
   // This would typically come from an authentication context,
@@ -313,7 +359,7 @@ const UserManagement: React.FC = () => {
         toast.success(`User deleted successfully.`);
       }
       // Refetch users to update the table after a successful action
-      fetchUsers();
+      fetchUsers(true); // Force API fetch after action
     } catch (err) {
       const axiosError = err as AxiosError<{ error?: string }>;
       console.error(`Error performing ${action} action:`, err);
@@ -324,12 +370,38 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  // Handle explicit refresh button click
+  const handleRefreshClick = () => {
+    fetchUsers(true); // Force API fetch
+    toast.success("Refreshing users...");
+  };
+
   return (
-    <div className="container mx-auto p-6 bg-base-100 min-h-screen rounded-lg shadow-xl">
+    // Use a container with responsive max-width and padding
+    <div className="container mx-auto p-4 md:p-6 bg-base-100 min-h-screen rounded-lg shadow-xl">
       <Toaster position="top-right" reverseOrder={false} />
-      <h1 className="text-4xl font-bold text-base-content mb-6 border-b-2 border-primary pb-3">
-        User Management
-      </h1>
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b-2 border-primary pb-3 space-y-4 md:space-y-0">
+        <h1 className="text-2xl md:text-4xl font-bold text-base-content">
+          {" "}
+          {/* Adjusted font size responsively */}
+          User Management
+        </h1>
+        {/* Refresh Button */}
+        <button
+          className="btn btn-outline btn-primary shadow-md mt-4 md:mt-0" // Added margin for spacing
+          onClick={handleRefreshClick}
+          aria-label="Refresh User List"
+          disabled={loading} // Disable while loading
+        >
+          {loading ? (
+            <span className="loading loading-spinner loading-sm"></span>
+          ) : (
+            <LuRefreshCw className="h-5 w-5" />
+          )}
+          <span className="ml-2 hidden md:inline">Refresh</span>{" "}
+          {/* Text on larger screens */}
+        </button>
+      </div>
 
       {/* Search and Pagination Controls (Top) */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 space-y-4 md:space-y-0 md:space-x-6">
@@ -337,7 +409,7 @@ const UserManagement: React.FC = () => {
           <input
             type="text"
             placeholder="Search by username or email..."
-            className="input input-bordered input-primary w-full shadow-sm"
+            className="input input-bordered input-primary w-full shadow-sm text-base-content"
             value={searchQuery}
             onChange={handleSearchChange}
             aria-label="Search users"
@@ -347,7 +419,7 @@ const UserManagement: React.FC = () => {
           <div className="flex items-center space-x-2">
             <span className="text-base-content">Items per page:</span>
             <select
-              className="select select-bordered select-primary shadow-sm"
+              className="select select-bordered select-primary shadow-sm text-base-content"
               value={itemsPerPage}
               onChange={handleItemsPerPageChange}
               aria-label="Items per page"
@@ -361,7 +433,7 @@ const UserManagement: React.FC = () => {
             <button
               className="join-item btn btn-outline btn-primary"
               onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
+              disabled={currentPage === 1 || loading} // Disable prev button if loading
               aria-label="Previous page"
             >
               «
@@ -372,7 +444,9 @@ const UserManagement: React.FC = () => {
             <button
               className="join-item btn btn-outline btn-primary"
               onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
+              disabled={
+                currentPage === totalPages || totalUsersCount === 0 || loading
+              } // Disable next button if loading
               aria-label="Next page"
             >
               »
@@ -381,10 +455,39 @@ const UserManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* User Table */}
+      {error && (
+        <div role="alert" className="alert alert-error mb-4">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="stroke-current shrink-0 h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+            ></path>
+          </svg>
+          <span className="text-error-content">{error}</span>
+          {/* Retry button for error state */}
+          <button
+            className="btn btn-sm btn-error ml-4"
+            onClick={() => fetchUsers(true)}
+          >
+            {" "}
+            {/* Retry forces API fetch */}
+            Retry
+          </button>
+        </div>
+      )}
+
       {loading ? (
-        // Skeleton Loader
-        <div className="overflow-x-auto bg-base-100 rounded-lg shadow-md">
+        // Skeleton Loader (Existing)
+        <div className="overflow-x-auto bg-base-100 rounded-lg shadow-md border border-base-300">
+          {" "}
+          {/* Added border */}
           <table className="table w-full">
             <thead>
               <tr className="bg-base-300 text-base-content">
@@ -399,7 +502,9 @@ const UserManagement: React.FC = () => {
             </thead>
             <tbody>
               {[...Array(itemsPerPage)].map((_, index) => (
-                <tr key={index} className="border-b border-gray-200">
+                <tr key={index} className="border-b border-base-300">
+                  {" "}
+                  {/* Added border */}
                   <td className="py-3 px-4">
                     <div className="skeleton mask mask-squircle w-12 h-12"></div>
                   </td>
@@ -426,33 +531,13 @@ const UserManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
-      ) : error ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="stroke-current shrink-0 h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-            ></path>
-          </svg>
-          <span className="text-error-content">{error}</span>
-          {/* Retry button for error state */}
-          <button className="btn btn-sm btn-error ml-4" onClick={fetchUsers}>
-            Retry
-          </button>
-        </div>
       ) : (
-        <div className="overflow-x-auto bg-base-100 rounded-lg shadow-md">
+        // Actual Data Display
+        <div className="overflow-x-auto bg-base-100 rounded-lg shadow-md border border-base-300">
+          {" "}
+          {/* Added border */}
           {/* Table view for medium and larger screens */}
           <table className="table w-full hidden md:table">
-            {" "}
-            {/* Hide table on small screens */}
             {/* head */}
             <thead>
               <tr className="bg-base-300 text-base-content">
@@ -471,7 +556,7 @@ const UserManagement: React.FC = () => {
                 users.map((user) => (
                   <tr
                     key={user.id}
-                    className="hover:bg-base-200 transition duration-150 ease-in-out"
+                    className="hover:bg-base-200 transition duration-150 ease-in-out border-b border-base-300" // Added border
                   >
                     <td className="py-3 px-4">
                       <div className="avatar">
@@ -554,7 +639,6 @@ const UserManagement: React.FC = () => {
                 ))}
             </tbody>
           </table>
-
           {/* Card view for small screens */}
           <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
             {" "}
