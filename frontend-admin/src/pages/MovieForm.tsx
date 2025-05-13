@@ -1,10 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  useForm,
-  Controller, // Keep Controller import just in case, though not used for SearchableInput now
-  type SubmitHandler,
-  useFieldArray,
-} from "react-hook-form";
+import { useForm, type SubmitHandler, useFieldArray } from "react-hook-form";
 import { LuSave, LuX } from "react-icons/lu";
 import { toast } from "react-hot-toast";
 
