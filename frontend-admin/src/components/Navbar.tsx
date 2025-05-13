@@ -81,8 +81,8 @@ const Navbar: React.FC<NavbarProps> = () => {
   // Define navigation links with icons
   const navLinks = [
     { path: "/dashboard", label: "Dashboard", icon: LuLayoutDashboard },
-    { path: "/movies", label: "Movie Entries", icon: LuFilm },
-    { path: "/user", label: "User Management", icon: LuUsers },
+    { path: "/movies", label: "Movie", icon: LuFilm },
+    { path: "/user", label: "User", icon: LuUsers },
   ];
 
   return (
