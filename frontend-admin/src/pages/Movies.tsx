@@ -86,10 +86,7 @@ const GenresChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         data={data}
         margin={{ top: 20, right: 20, bottom: 5, left: 0 }}
       >
-        <CartesianGrid
-          strokeDasharray="3 3"
-          className="stroke-neutral-content"
-        />
+        <CartesianGrid strokeDasharray="3 3" className="stroke-base-content" />
         <XAxis
           dataKey="name"
           className="fill-base-content"
@@ -111,8 +108,7 @@ const GenresChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         <Line
           type="monotone"
           dataKey="count"
-          stroke="hsl(var(--p))"
-          strokeWidth={2}
+          className="stroke-primary fill-primary stroke-2"
           dot={{
             className: "fill-primary stroke-2 stroke-primary",
             r: 5,
@@ -140,10 +136,7 @@ const DirectorsChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         data={data}
         margin={{ top: 20, right: 20, bottom: 5, left: 0 }}
       >
-        <CartesianGrid
-          strokeDasharray="3 3"
-          className="stroke-neutral-content"
-        />
+        <CartesianGrid strokeDasharray="3 3" className="stroke-base-content" />
         <XAxis
           dataKey="name"
           className="fill-base-content"
@@ -165,10 +158,9 @@ const DirectorsChart: React.FC<{ data: { name: string; count: number }[] }> = ({
         <Line
           type="monotone"
           dataKey="count"
-          stroke="hsl(var(--s))"
-          strokeWidth={2}
+          className="stroke-primary fill-primary stroke-2"
           dot={{
-            className: "fill-secondary stroke-2 stroke-secondary",
+            className: "fill-primary stroke-2 stroke-primary",
             r: 5,
           }}
           activeDot={{
@@ -758,7 +750,7 @@ export default function AdminMovieDashboard() {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-6 bg-base-100 min-h-screen rounded-lg shadow-xl relative">
+    <div className="container mx-auto max-w-7xl p-4 md:p-6 bg-base-100 min-h-screen rounded-lg relative">
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b-2 border-primary pb-3 space-y-4 md:space-y-0">
         <h1 className="text-2xl md:text-4xl font-bold text-base-content">
           Admin Movie Dashboard

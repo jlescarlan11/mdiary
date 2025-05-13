@@ -6,31 +6,27 @@ import {
   useFieldArray,
 } from "react-hook-form";
 import { LuSave, LuX } from "react-icons/lu";
-import { toast } from "react-hot-toast"; // Import toast
+import { toast } from "react-hot-toast";
 
-// Define the structure for movie data that can be edited or added via the form
-// This interface should match the EditableMovieData used in Movies.tsx
 export interface EditableMovieData {
-  id?: string; // Optional for adding a new movie
+  id?: string;
   title: string;
   year: number;
   duration: number;
   description: string;
   posterUrl: string;
-  genres: { id?: string; name: string }[]; // Genres can be existing (with id) or new (no id)
-  directors: { id?: string; firstName: string; lastName: string }[]; // Directors can be existing or new
+  genres: { id?: string; name: string }[];
+  directors: { id?: string; firstName: string; lastName: string }[];
 }
 
-// Define props for the MovieForm component
 interface MovieFormProps {
-  movieToEdit: EditableMovieData | null; // Data of the movie being edited, or null for adding
-  onSuccess: (data: EditableMovieData) => Promise<void>; // Function to call on successful form submission
-  onCancel: () => void; // Function to call when the form is cancelled
-  availableGenres: { id?: string; name: string }[]; // List of genres available from the backend
-  availableDirectors: { id?: string; firstName: string; lastName: string }[]; // List of directors available from the backend
+  movieToEdit: EditableMovieData | null;
+  onSuccess: (data: EditableMovieData) => Promise<void>;
+  onCancel: () => void;
+  availableGenres: { id?: string; name: string }[];
+  availableDirectors: { id?: string; firstName: string; lastName: string }[];
 }
 
-// Helper component for searchable input with suggestions (for Genres and Directors)
 interface SearchableInputProps<T> {
   label: string;
   placeholder: string;
@@ -39,9 +35,8 @@ interface SearchableInputProps<T> {
   onChange: (value: T | null) => void;
   getOptionLabel: (option: T) => string;
   getOptionValue: (option: T) => string;
-  isOptionEqualToValue?: (option: T, value: T | null) => boolean;
   addNewLabel?: string;
-  parseInput: (input: string) => T; // Function to parse input string into an object of type T
+  parseInput: (input: string) => T;
 }
 
 const SearchableInput = <T,>({
@@ -52,9 +47,8 @@ const SearchableInput = <T,>({
   onChange,
   getOptionLabel,
   getOptionValue,
-  isOptionEqualToValue,
   addNewLabel = "Add new",
-  parseInput, // Destructure parseInput prop
+  parseInput,
 }: SearchableInputProps<T>) => {
   const [inputValue, setInputValue] = useState(
     value ? getOptionLabel(value) : ""
@@ -64,143 +58,109 @@ const SearchableInput = <T,>({
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Update input value when the 'value' prop changes (e.g., when editing a movie)
   useEffect(() => {
     setInputValue(value ? getOptionLabel(value) : "");
   }, [value, getOptionLabel]);
 
-  // Filter options based on input value
   useEffect(() => {
-    if (inputValue) {
-      const lowerCaseInput = inputValue.toLowerCase();
-      const filtered = options.filter((option) =>
+    const lowerCaseInput = inputValue.toLowerCase();
+    setFilteredOptions(
+      options.filter((option) =>
         getOptionLabel(option).toLowerCase().includes(lowerCaseInput)
-      );
-      setFilteredOptions(filtered);
-    } else {
-      setFilteredOptions(options); // Show all options when input is empty
-    }
+      )
+    );
   }, [inputValue, options, getOptionLabel]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
-
-    // If the input value no longer matches the current selected value, clear the selected value
-    if (value && getOptionLabel(value) !== newValue) {
-      onChange(null);
-    }
-
-    setShowSuggestions(true); // Show suggestions as user types
+    if (value && getOptionLabel(value) !== newValue) onChange(null);
+    setShowSuggestions(true);
   };
 
-  const handleOptionClick = (option: T) => {
+  const handleOptionSelect = (option: T) => {
     setInputValue(getOptionLabel(option));
-    onChange(option); // Pass the selected option object
-    setShowSuggestions(false); // Hide suggestions after selection
+    onChange(option);
+    setShowSuggestions(false);
+    inputRef.current?.focus();
   };
 
-  const handleBlur = () => {
-    // ESLint might report '_e' as unused here, but it's implicitly used by the event handler context.
-    // The timeout is crucial to allow click events on suggestions to register before hiding.
-    setTimeout(() => {
-      if (!suggestionsRef.current?.contains(document.activeElement)) {
-        setShowSuggestions(false);
-        const matchedOption = options.find(
-          (option) =>
-            // Using getOptionValue for comparison where possible, fallback to label
-            (isOptionEqualToValue
-              ? isOptionEqualToValue(option, value)
-              : getOptionValue(option) === inputValue) ||
-            getOptionLabel(option) === inputValue
+  const handleBlur = (e: React.FocusEvent) => {
+    if (!suggestionsRef.current?.contains(e.relatedTarget as Node)) {
+      const input = inputValue.trim();
+      if (input) {
+        const existing = options.find(
+          (o) => getOptionLabel(o).toLowerCase() === input.toLowerCase()
         );
-
-        if (!matchedOption && inputValue.trim() !== "") {
-          // Use the parseInput prop to create the new value object
-          // Using 'any' here because the exact structure of T (Genre or Director) is generic.
-          // A more type-safe approach would involve conditional types or separate components.
-          const newValueObject = parseInput(inputValue.trim());
-          onChange(newValueObject);
-        } else if (matchedOption) {
-          // If it matches an existing option, ensure that option is set as the value
-          onChange(matchedOption);
-        } else if (inputValue.trim() === "") {
-          // If input is cleared, set value to null
-          onChange(null);
-        }
+        onChange(existing || parseInput(input));
       }
-    }, 100); // Small delay to allow click event on suggestion
+      setShowSuggestions(false);
+    }
   };
 
-  const handleFocus = () => {
-    setShowSuggestions(true); // Show suggestions when input is focused
-  };
-
-  // Handle clicks outside to close suggestions
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (
         inputRef.current &&
-        !inputRef.current.contains(event.target as Node) &&
+        !inputRef.current.contains(e.target as Node) &&
         suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node)
+        !suggestionsRef.current.contains(e.target as Node)
       ) {
         setShowSuggestions(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [inputRef, suggestionsRef]);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div className="form-control w-full relative">
       <label className="label">
-        <span className="label-text">{label}</span>
+        <span className="label-text font-medium text-base-content">
+          {label}
+        </span>
       </label>
       <input
+        ref={inputRef}
         type="text"
         placeholder={placeholder}
-        className="input input-bordered w-full"
+        className="input input-bordered w-full input-primary focus:ring-2 focus:ring-primary"
         value={inputValue}
         onChange={handleInputChange}
+        onFocus={() => setShowSuggestions(true)}
         onBlur={handleBlur}
-        onFocus={handleFocus}
-        ref={inputRef}
       />
       {showSuggestions && (
         <div
-          // Increased z-index to z-20 (Tailwind class) to try and fix clickability issues on desktop
-          className="absolute z-20 bg-base-100 border border-base-300 rounded-md mt-1 w-full max-h-48 overflow-y-auto shadow-lg"
-          style={{ top: "100%" }} // Position below the input
           ref={suggestionsRef}
+          className="absolute z-50 mt-2 w-full bg-base-100 border-2 border-primary rounded-lg shadow-xl max-h-48 overflow-y-auto"
         >
-          {filteredOptions.length > 0
-            ? filteredOptions.map((option, index) => (
-                <div
-                  key={getOptionValue(option) || index} // Use value or index for key
-                  className="p-2 cursor-pointer hover:bg-base-200 text-base-content"
-                  onClick={() => handleOptionClick(option)} // Click handler is here
-                >
-                  {getOptionLabel(option)}
-                </div>
-              ))
-            : // Option to add a new value if no suggestions match
-              inputValue.trim() !== "" && (
-                <div
-                  className="p-2 cursor-pointer hover:bg-base-200 text-base-content italic"
-                  onClick={() => {
-                    // Use the parseInput prop to create the new value object
-                    // Using 'any' here because the exact structure of T (Genre or Director) is generic.
-                    const newValueObject = parseInput(inputValue.trim());
-                    onChange(newValueObject);
-                    setShowSuggestions(false);
-                  }}
-                >
-                  {addNewLabel} "{inputValue.trim()}"
-                </div>
-              )}
+          {filteredOptions.map((option, index) => (
+            <button
+              key={getOptionValue(option) || index}
+              type="button"
+              className="w-full text-left p-3 hover:bg-primary/10 text-base-content flex items-center gap-2"
+              onMouseDown={() => handleOptionSelect(option)}
+            >
+              <span className="flex-1">{getOptionLabel(option)}</span>
+            </button>
+          ))}
+          {inputValue.trim() && !filteredOptions.length && (
+            <button
+              type="button"
+              className="w-full text-left p-3 hover:bg-primary/10 text-base-content italic flex items-center gap-2"
+              onMouseDown={() => {
+                onChange(parseInput(inputValue.trim()));
+                setInputValue(inputValue.trim());
+                setShowSuggestions(false);
+              }}
+            >
+              <span className="flex-1">
+                {addNewLabel} "{inputValue.trim()}"
+              </span>
+              <span className="badge badge-primary badge-sm">New</span>
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -214,45 +174,30 @@ const MovieForm: React.FC<MovieFormProps> = ({
   availableGenres,
   availableDirectors,
 }) => {
-  const {
-    control,
-    handleSubmit,
-    register,
-    reset,
-    formState: { errors, isSubmitting },
-    getValues,
-  } = useForm<EditableMovieData>({
-    defaultValues: movieToEdit || {
-      title: "",
-      year: new Date().getFullYear(),
-      duration: 0,
-      description: "",
-      posterUrl: "",
-      genres: [],
-      directors: [],
-    },
-  });
+  const { control, handleSubmit, register, reset, formState } =
+    useForm<EditableMovieData>({
+      defaultValues: movieToEdit || {
+        title: "",
+        year: new Date().getFullYear(),
+        duration: 0,
+        description: "",
+        posterUrl: "",
+        genres: [],
+        directors: [],
+      },
+    });
 
-  // Use useFieldArray for managing dynamic lists of genres and directors
   const {
     fields: genreFields,
     append: appendGenre,
     remove: removeGenre,
-  } = useFieldArray({
-    control,
-    name: "genres",
-  });
-
+  } = useFieldArray({ control, name: "genres" });
   const {
     fields: directorFields,
     append: appendDirector,
     remove: removeDirector,
-  } = useFieldArray({
-    control,
-    name: "directors",
-  });
+  } = useFieldArray({ control, name: "directors" });
 
-  // Reset form when movieToEdit changes (e.g., when switching from add to edit)
   useEffect(() => {
     reset(
       movieToEdit || {
@@ -268,337 +213,268 @@ const MovieForm: React.FC<MovieFormProps> = ({
   }, [movieToEdit, reset]);
 
   const onSubmit: SubmitHandler<EditableMovieData> = async (data) => {
-    await onSuccess(data);
-  };
-
-  // Handlers for managing multiple genres and directors
-  const handleAddGenre = (genre: { id?: string; name: string } | null) => {
-    if (genre?.name.trim()) {
-      const currentGenres = getValues("genres") || [];
-      // Explicitly type 'g' to avoid implicit any
-      if (
-        !currentGenres.some(
-          (g: { id?: string; name: string }) =>
-            g.name.toLowerCase() === genre.name.toLowerCase()
-        )
-      ) {
-        appendGenre(genre); // Use append from useFieldArray
-      } else {
-        // Use the genre name from the input for the toast message
-        toast.error(`Genre "${genre.name.trim()}" already added.`);
-      }
+    try {
+      await onSuccess(data);
+    } catch {
+      toast.error("Failed to save movie");
     }
   };
 
-  const handleRemoveGenre = (index: number) => {
-    removeGenre(index); // Use remove from useFieldArray
+  const handleAddGenre = (genre: { id?: string; name: string } | null) => {
+    if (genre?.name) {
+      const exists = genreFields.some(
+        (g) => g.name.toLowerCase() === genre.name.toLowerCase()
+      );
+      if (exists) {
+        toast.error(`Genre "${genre.name}" already exists`);
+      } else {
+        appendGenre(genre);
+      }
+    }
   };
 
   const handleAddDirector = (
     director: { id?: string; firstName: string; lastName: string } | null
   ) => {
-    if (director?.firstName.trim() || director?.lastName.trim()) {
-      // Use getValues to get the current state of the directors array
-      const currentDirectors = getValues("directors") || [];
-      // Prevent adding duplicates based on full name
-      const newDirectorFullName =
-        `${director.firstName} ${director.lastName}`.toLowerCase();
-      // Explicitly type 'd' to avoid implicit any
-      if (
-        !currentDirectors.some(
-          (d: { id?: string; firstName: string; lastName: string }) =>
-            `${d.firstName} ${d.lastName}`.toLowerCase() === newDirectorFullName
-        )
-      ) {
-        appendDirector(director); // Use append from useFieldArray
+    if (director?.firstName || director?.lastName) {
+      const exists = directorFields.some(
+        (d) =>
+          `${d.firstName} ${d.lastName}`.toLowerCase() ===
+          `${director.firstName} ${director.lastName}`.toLowerCase()
+      );
+      if (exists) {
+        toast.error(
+          `Director "${director.firstName} ${director.lastName}" exists`
+        );
       } else {
-        // Use the director name from the input for the toast message
-        toast.error(`Director "${newDirectorFullName}" already added.`);
+        appendDirector(director);
       }
     }
   };
 
-  const handleRemoveDirector = (index: number) => {
-    removeDirector(index); // Use remove from useFieldArray
-  };
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {/* Title */}
-      <div className="form-control w-full">
-        <label className="label">
-          <span className="label-text">Title</span>
-        </label>
-        <input
-          type="text"
-          placeholder="Movie Title"
-          className={`input input-bordered w-full ${
-            errors.title ? "input-error" : ""
-          }`}
-          {...register("title", { required: "Title is required" })}
-        />
-        {errors.title && (
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="space-y-6 p-6 bg-base-100 rounded-xl shadow-lg"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Title */}
+        <div className="form-control">
           <label className="label">
-            <span className="label-text-alt text-error">
-              {errors.title.message}
-            </span>
+            <span className="label-text font-semibold text-lg">Title</span>
           </label>
-        )}
-      </div>
-
-      {/* Year */}
-      <div className="form-control w-full">
-        <label className="label">
-          <span className="label-text">Year</span>
-        </label>
-        <input
-          type="number"
-          placeholder="Release Year"
-          className={`input input-bordered w-full ${
-            errors.year ? "input-error" : ""
-          }`}
-          {...register("year", {
-            required: "Year is required",
-            valueAsNumber: true,
-            min: { value: 1800, message: "Year must be after 1800" },
-            max: {
-              value: new Date().getFullYear() + 5, // Allow future movies slightly
-              message: `Year cannot be in the far future`,
-            },
-          })}
-        />
-        {errors.year && (
-          <label className="label">
-            <span className="label-text-alt text-error">
-              {errors.year.message}
+          <input
+            {...register("title", { required: "Title is required" })}
+            type="text"
+            placeholder="Enter movie title"
+            className="input input-primary input-bordered focus:ring-2 focus:ring-primary"
+          />
+          {formState.errors.title && (
+            <span className="text-error text-sm mt-1">
+              {formState.errors.title.message}
             </span>
-          </label>
-        )}
-      </div>
-
-      {/* Duration */}
-      <div className="form-control w-full">
-        <label className="label">
-          <span className="label-text">Duration (minutes)</span>
-        </label>
-        <input
-          type="number"
-          placeholder="Duration in minutes"
-          className={`input input-bordered w-full ${
-            errors.duration ? "input-error" : ""
-          }`}
-          {...register("duration", {
-            required: "Duration is required",
-            valueAsNumber: true,
-            min: { value: 1, message: "Duration must be at least 1 minute" },
-          })}
-        />
-        {errors.duration && (
-          <label className="label">
-            <span className="label-text-alt text-error">
-              {errors.duration.message}
-            </span>
-          </label>
-        )}
-      </div>
-
-      {/* Description */}
-      <div className="form-control w-full">
-        <label className="label">
-          <span className="label-text">Description</span>
-        </label>
-        <textarea
-          placeholder="Movie Description"
-          className={`textarea textarea-bordered w-full ${
-            errors.description ? "textarea-error" : ""
-          }`}
-          {...register("description", { required: "Description is required" })}
-        ></textarea>
-        {errors.description && (
-          <label className="label">
-            <span className="label-text-alt text-error">
-              {errors.description.message}
-            </span>
-          </label>
-        )}
-      </div>
-
-      {/* Poster URL */}
-      <div className="form-control w-full">
-        <label className="label">
-          <span className="label-text">Poster URL</span>
-        </label>
-        <input
-          type="url"
-          placeholder="https://example.com/poster.jpg"
-          className={`input input-bordered w-full ${
-            errors.posterUrl ? "input-error" : ""
-          }`}
-          {...register("posterUrl", {
-            required: "Poster URL is required",
-            pattern: {
-              value: /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i,
-              message: "Invalid URL format",
-            },
-          })}
-        />
-        {errors.posterUrl && (
-          <label className="label">
-            <span className="label-text-alt text-error">
-              {errors.posterUrl.message}
-            </span>
-          </label>
-        )}
-      </div>
-
-      {/* Genres (Searchable Input with Add/Remove) */}
-      <div className="form-control w-full">
-        <label className="label">
-          <span className="label-text">Genres</span>
-        </label>
-        {/* Use Controller for react-hook-form integration */}
-        <Controller
-          name="genres"
-          control={control}
-          render={() => (
-            <div>
-              {/* Display currently selected genres */}
-              <div className="flex flex-wrap gap-2 mb-2">
-                {genreFields.map((genre, index) => (
-                  // Use genreFields from useFieldArray. Key can be genre.id or genre.name
-                  <div
-                    key={genre.id || genre.name}
-                    className="badge badge-primary gap-2"
-                  >
-                    {genre.name}
-                    <button
-                      type="button"
-                      className="btn btn-xs btn-circle btn-ghost"
-                      onClick={() => handleRemoveGenre(index)}
-                      aria-label={`Remove genre ${genre.name}`}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {/* Searchable input for adding new genres */}
-              <SearchableInput
-                label="" // Label is handled above
-                placeholder="Search or add genre"
-                value={null} // Always treat this input as for adding, not editing a single value
-                options={availableGenres}
-                onChange={(genre) => handleAddGenre(genre)} // Add selected/new genre to the list
-                getOptionLabel={(option) => option.name}
-                getOptionValue={(option) => option.id || option.name} // Use id or name as value
-                addNewLabel="Add new genre:" // Custom label for adding new
-                // Function to parse the input string into a genre object
-                parseInput={(input) => ({ name: input.trim() })}
-              />
-            </div>
           )}
-        />
-        {errors.genres && (
+        </div>
+
+        {/* Year & Duration */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text font-semibold text-lg">Year</span>
+            </label>
+            <input
+              {...register("year", {
+                required: "Year is required",
+                min: { value: 1888, message: "First movie was made in 1888" },
+                max: {
+                  value: new Date().getFullYear() + 2,
+                  message: "Cannot be more than 2 years in future",
+                },
+              })}
+              type="number"
+              className="input input-primary input-bordered focus:ring-2 focus:ring-primary"
+            />
+            {formState.errors.year && (
+              <span className="text-error text-sm mt-1">
+                {formState.errors.year.message}
+              </span>
+            )}
+          </div>
+
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text font-semibold text-lg">
+                Duration (min)
+              </span>
+            </label>
+            <input
+              {...register("duration", {
+                required: "Duration is required",
+                min: { value: 1, message: "Minimum 1 minute" },
+              })}
+              type="number"
+              className="input input-primary input-bordered focus:ring-2 focus:ring-primary"
+            />
+            {formState.errors.duration && (
+              <span className="text-error text-sm mt-1">
+                {formState.errors.duration.message}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Poster URL */}
+        <div className="form-control md:col-span-2">
           <label className="label">
-            <span className="label-text-alt text-error">
-              {errors.genres.message as string} {/* Cast to string if needed */}
+            <span className="label-text font-semibold text-lg">Poster URL</span>
+          </label>
+          <input
+            {...register("posterUrl", {
+              required: "Poster URL is required",
+              pattern: {
+                value: /^(https?):\/\/[^\s$.?#].[^\s]*$/i,
+                message: "Invalid URL format",
+              },
+            })}
+            type="url"
+            placeholder="https://example.com/poster.jpg"
+            className="input input-primary input-bordered focus:ring-2 focus:ring-primary"
+          />
+          {formState.errors.posterUrl && (
+            <span className="text-error text-sm mt-1">
+              {formState.errors.posterUrl.message}
+            </span>
+          )}
+        </div>
+
+        {/* Description */}
+        <div className="form-control md:col-span-2">
+          <label className="label">
+            <span className="label-text font-semibold text-lg">
+              Description
             </span>
           </label>
-        )}
-      </div>
+          <textarea
+            {...register("description", {
+              required: "Description is required",
+            })}
+            className="textarea textarea-primary textarea-bordered h-32 focus:ring-2 focus:ring-primary"
+            placeholder="Enter movie description"
+          />
+          {formState.errors.description && (
+            <span className="text-error text-sm mt-1">
+              {formState.errors.description.message}
+            </span>
+          )}
+        </div>
 
-      {/* Directors (Searchable Input with Add/Remove) */}
-      <div className="form-control w-full">
-        <label className="label">
-          <span className="label-text">Directors</span>
-        </label>
-        {/* Use Controller for react-hook-form integration */}
-        <Controller
-          name="directors"
-          control={control}
-          render={() => (
-            <div>
-              {/* Display currently selected directors */}
-              <div className="flex flex-wrap gap-2 mb-2">
-                {directorFields.map((director, index) => (
-                  // Use directorFields from useFieldArray. Key can be director.id or combined name
-                  <div
-                    key={
-                      director.id ||
-                      `${director.firstName}-${director.lastName}`
-                    }
-                    className="badge badge-secondary gap-2"
-                  >
-                    {`${director.firstName} ${director.lastName}`}
-                    <button
-                      type="button"
-                      className="btn btn-xs btn-circle btn-ghost"
-                      onClick={() => handleRemoveDirector(index)}
-                      aria-label={`Remove director ${director.firstName} ${director.lastName}`}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+        {/* Genres */}
+        <div className="form-control md:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Genres</h3>
+          </div>
+          <div className="flex flex-wrap gap-3 mb-4">
+            {genreFields.map((genre, index) => (
+              <div
+                key={genre.id}
+                className="badge badge-primary badge-lg gap-2 p-4"
+              >
+                <span>{genre.name}</span>
+                <button
+                  type="button"
+                  className="btn btn-circle btn-xs btn-ghost"
+                  onClick={() => removeGenre(index)}
+                >
+                  ✕
+                </button>
               </div>
-              {/* Searchable input for adding new directors */}
+            ))}
+          </div>
+          <Controller
+            name="genres"
+            control={control}
+            render={() => (
               <SearchableInput
-                label="" // Label is handled above
-                placeholder="Search or add director (First Last)"
-                value={null} // Always treat this input as for adding
+                label="Add Genre"
+                placeholder="Search or add genre..."
+                value={null}
+                options={availableGenres}
+                onChange={handleAddGenre}
+                getOptionLabel={(g) => g.name}
+                getOptionValue={(g) => g.id || g.name}
+                parseInput={(name) => ({ name })}
+              />
+            )}
+          />
+        </div>
+
+        {/* Directors */}
+        <div className="form-control md:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Directors</h3>
+          </div>
+          <div className="flex flex-wrap gap-3 mb-4">
+            {directorFields.map((director, index) => (
+              <div
+                key={director.id}
+                className="badge badge-secondary badge-lg gap-2 p-4"
+              >
+                <span>{`${director.firstName} ${director.lastName}`}</span>
+                <button
+                  type="button"
+                  className="btn btn-circle btn-xs btn-ghost"
+                  onClick={() => removeDirector(index)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <Controller
+            name="directors"
+            control={control}
+            render={() => (
+              <SearchableInput
+                label="Add Director"
+                placeholder="Search or add director..."
+                value={null}
                 options={availableDirectors}
-                onChange={(director) => handleAddDirector(director)} // Add selected/new director
-                getOptionLabel={(option) =>
-                  `${option.firstName} ${option.lastName}`
-                }
-                getOptionValue={(option) =>
-                  option.id || `${option.firstName}-${option.lastName}`
-                }
-                addNewLabel="Add new director:" // Custom label for adding new
-                // Function to parse the input string into a director object
+                onChange={handleAddDirector}
+                getOptionLabel={(d) => `${d.firstName} ${d.lastName}`}
+                getOptionValue={(d) => d.id || `${d.firstName}-${d.lastName}`}
                 parseInput={(input) => {
-                  const [firstName, ...lastNameParts] = input.trim().split(" ");
-                  return {
-                    firstName: firstName || "",
-                    lastName: lastNameParts.join(" ") || "",
-                  };
+                  const [firstName, ...lastName] = input.split(" ");
+                  return { firstName, lastName: lastName.join(" ") };
                 }}
               />
-            </div>
-          )}
-        />
-        {errors.directors && (
-          <label className="label">
-            <span className="label-text-alt text-error">
-              {errors.directors.message as string}{" "}
-              {/* Cast to string if needed */}
-            </span>
-          </label>
-        )}
+            )}
+          />
+        </div>
       </div>
 
       {/* Form Actions */}
-      <div className="modal-action">
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <span className="loading loading-spinner"></span>
-          ) : (
-            <LuSave className="h-5 w-5 mr-2" />
-          )}
-          {movieToEdit ? "Update Movie" : "Add Movie"}
-        </button>
+      <div className="modal-action flex justify-end gap-4 mt-8">
         <button
           type="button"
-          className="btn btn-ghost"
+          className="btn btn-outline btn-accent px-8"
           onClick={onCancel}
-          disabled={isSubmitting}
         >
-          <LuX className="h-5 w-5 mr-2" />
+          <LuX className="mr-2" />
           Cancel
+        </button>
+        <button
+          type="submit"
+          className="btn btn-primary px-8"
+          disabled={formState.isSubmitting}
+        >
+          {formState.isSubmitting ? (
+            <span className="loading loading-spinner" />
+          ) : (
+            <>
+              <LuSave className="mr-2" />
+              {movieToEdit ? "Update Movie" : "Add Movie"}
+            </>
+          )}
         </button>
       </div>
     </form>
