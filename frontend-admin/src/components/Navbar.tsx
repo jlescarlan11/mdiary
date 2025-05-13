@@ -4,7 +4,6 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { logout, isAuthenticated } from "../auth";
 // Import LuPalette icon
 import {
-  LuLaptopMinimal,
   LuLayoutDashboard,
   LuFilm,
   LuUsers,
@@ -100,7 +99,7 @@ const Navbar: React.FC<NavbarProps> = () => {
             {/* Left section: Logo and Title */}
             <div className="navbar-start">
               <div className="text-xl flex items-center gap-2 md:gap-4">
-                <LuLaptopMinimal className="text-primary h-6 w-6" />{" "}
+                <LuFilm className="text-primary h-6 w-6" />{" "}
                 {/* Increased icon size slightly */}
                 <Link
                   to="/dashboard"
@@ -116,15 +115,6 @@ const Navbar: React.FC<NavbarProps> = () => {
             {/* Center section: This section is now empty as navigation moves to navbar-end */}
             <div className="navbar-center hidden lg:flex">
               {/* Navigation links are now in navbar-end for larger screens */}
-            </div>
-
-            {/* Right section: Navigation, Theme Switcher, and Logout */}
-            {/* Added flex and gap for layout and spacing */}
-            <div className="navbar-end flex items-center space-x-2 md:space-x-4 lg:space-x-6">
-              {" "}
-              {/* Increased space-x for lg */}
-              {/* Navigation Links (visible on large screens) */}
-              {/* Moved navigation links here and display full label */}
               <ul className="menu menu-horizontal px-1 space-x-1 hidden lg:flex">
                 {" "}
                 {/* Show only on lg+ screens */}
@@ -149,6 +139,15 @@ const Navbar: React.FC<NavbarProps> = () => {
                   );
                 })}
               </ul>
+            </div>
+
+            {/* Right section: Navigation, Theme Switcher, and Logout */}
+            {/* Added flex and gap for layout and spacing */}
+            <div className="navbar-end flex items-center space-x-2 md:space-x-4 lg:space-x-6">
+              {" "}
+              {/* Increased space-x for lg */}
+              {/* Navigation Links (visible on large screens) */}
+              {/* Moved navigation links here and display full label */}
               {/* Integrated Theme Changer (visible on ALL screens) */}
               <div
                 className="dropdown dropdown-end tooltip tooltip-bottom"
