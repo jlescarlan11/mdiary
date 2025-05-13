@@ -51,8 +51,8 @@ interface Movie {
 // Define props interface for MovieFormModal
 interface MovieFormModalProps {
   isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
+  onClose: () => void; // Function to call when the modal should close (e.g., on cancel or success/failure)
+  onSuccess: () => void; // Function to call after a successful add/edit operation (for parent to refresh data)
   movieToEdit: EditableMovieData | null;
   availableGenres: Genre[];
   availableDirectors: Director[];
@@ -93,6 +93,7 @@ const GenresChart: React.FC<{ data: { name: string; count: number }[] }> = ({
           angle={-45}
           textAnchor="end"
           tick={{ fontSize: 12 }}
+          height={60} // Give more space for rotated labels
         />
         <YAxis className="fill-base-content" />
         <Tooltip
@@ -143,6 +144,7 @@ const DirectorsChart: React.FC<{ data: { name: string; count: number }[] }> = ({
           angle={-45}
           textAnchor="end"
           tick={{ fontSize: 12 }}
+          height={60} // Give more space for rotated labels
         />
         <YAxis className="fill-base-content" />
         <Tooltip
@@ -312,8 +314,8 @@ const MovieListTable: React.FC<{
 // Component for the Movie Form Modal (handles both Create and Edit)
 const MovieFormModal: React.FC<MovieFormModalProps> = ({
   isOpen,
-  onClose,
-  onSuccess,
+  onClose, // This is the prop passed from AdminMovieDashboard (handleFormCancel)
+  onSuccess, // This is the prop passed from AdminMovieDashboard (handleFormSuccess)
   movieToEdit,
   availableGenres,
   availableDirectors,
@@ -322,74 +324,90 @@ const MovieFormModal: React.FC<MovieFormModalProps> = ({
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
+  // Effect to manage focus and escape key handling when modal is open
   useEffect(() => {
     if (isOpen) {
+      // Find the first focusable element and focus it
       const firstFocusableElement = modalRef.current?.querySelector(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       ) as HTMLElement | null;
       firstFocusableElement?.focus();
 
+      // Add event listener for Escape key
       const handleEscape = (event: KeyboardEvent) => {
         if (event.key === "Escape") {
-          onClose();
+          onClose(); // Call the onClose prop to close the modal
         }
       };
       document.addEventListener("keydown", handleEscape);
 
+      // Cleanup function to remove event listener
       return () => {
         document.removeEventListener("keydown", handleEscape);
       };
     }
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose]); // Depend on isOpen and onClose prop
 
+  // Handles the actual movie saving logic (add or update)
+  // This function is passed as the onSuccess prop to the MovieForm component
   const onSubmitFromForm = async (movieData: EditableMovieData) => {
     try {
       if (movieToEdit && movieData.id) {
-        await onUpdateMovie(movieData);
+        await onUpdateMovie(movieData); // Call the parent's update function
       } else {
-        await onAddMovie(movieData);
+        await onAddMovie(movieData); // Call the parent's add function
       }
+      // If the API call is successful, call the parent's onSuccess handler
+      // This handler is responsible for refreshing data
       onSuccess();
     } catch (error) {
-      console.error("Form submission error:", error);
+      // Error handling and toast are handled in the parent's add/update functions
+      console.error("Form submission error in MovieFormModal:", error);
+      // Re-throw the error so it can be handled by the caller if necessary
       throw error;
+    } finally {
+      // Always close the modal after the API call finishes (success or failure)
+      onClose();
     }
   };
 
+  // If modal is not open, return null
   if (!isOpen) return null;
 
   return (
+    // Modal container with fixed positioning and backdrop
     <div
-      className="modal modal-open"
+      className="modal modal-open fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
       ref={modalRef}
     >
-      <form
-        method="dialog"
-        className="modal-backdrop fixed inset-0 z-0"
-        onClick={onClose}
+      {/* Modal backdrop - clicking closes the modal */}
+      <div
+        className="modal-backdrop absolute inset-0"
+        onClick={onClose} // Call the onClose prop
         aria-label="Close modal"
-      >
-        <button></button>
-      </form>
-      <div className="modal-box bg-base-100 text-base-content w-11/12 max-w-2xl">
+      ></div>
+      {/* Modal content box */}
+      <div className="modal-box bg-base-100 text-base-content w-11/12 max-w-2xl relative z-10 max-h-[90vh] overflow-y-auto">
         <h3 className="font-bold text-lg" id="modal-title">
           {movieToEdit ? "Edit Movie" : "Add New Movie"}
         </h3>
+        {/* Close button */}
         <button
           className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 text-base-content"
-          onClick={onClose}
+          onClick={onClose} // Call the onClose prop
           aria-label="Close modal"
         >
           ✕
         </button>
+        {/* Movie Form component */}
         <div className="py-4">
           <MovieForm
             movieToEdit={movieToEdit}
-            onSuccess={onSubmitFromForm}
-            onCancel={onClose}
+            onSuccess={onSubmitFromForm} // Pass the internal submit handler
+            onCancel={onClose} // Pass the onClose prop for the Cancel button
             availableGenres={availableGenres}
             availableDirectors={availableDirectors}
           />
@@ -437,6 +455,7 @@ export default function AdminMovieDashboard() {
       setLoading(true);
       setError(null);
 
+      // Construct a unique cache key based on state
       const localStorageKey = `cachedMovies_${searchTerm}_${currentPage}_${itemsPerPage}_${sortColumn}_${sortDirection}`;
 
       if (!forceApiFetch) {
@@ -450,21 +469,27 @@ export default function AdminMovieDashboard() {
             computeAnalytics(cachedMovies);
             setLoading(false);
             console.log("Loaded movies from local storage.");
-            return;
+            return; // Exit if cached data is used
           } catch (e) {
             console.error("Error parsing cached data:", e);
+            // If parsing fails, proceed to fetch from API
           }
         }
       }
 
+      // Fetch from API if no cached data or forceApiFetch is true
       try {
         const token = localStorage.getItem("token");
         if (!token) {
-          setError("Authentication token not found. Please log in.");
-          return;
+          // Handle missing token - maybe redirect to login or show error
+          console.error("Authentication token not found for fetching options.");
+          setLoading(false); // Ensure loading is false on auth error
+          return; // Stop execution if no token
         }
         const apiUrl = `${import.meta.env
-          .VITE_GET_MOVIES_URL!}?search=${searchTerm}&page=${currentPage}&limit=${itemsPerPage}${
+          .VITE_GET_MOVIES_URL!}?search=${encodeURIComponent(
+          searchTerm
+        )}&page=${currentPage}&limit=${itemsPerPage}${
           sortColumn
             ? `&sortColumn=${sortColumn}&sortDirection=${sortDirection}`
             : ""
@@ -481,6 +506,7 @@ export default function AdminMovieDashboard() {
         setTotalMoviesCount(totalMovies);
         computeAnalytics(movies);
 
+        // Cache the fetched data
         try {
           localStorage.setItem(
             localStorageKey,
@@ -489,6 +515,7 @@ export default function AdminMovieDashboard() {
           console.log("Cached movies in local storage.");
         } catch (e) {
           console.error("Error saving to local storage:", e);
+          // Non-critical error, continue
         }
       } catch (err) {
         console.error("Error loading movies", err);
@@ -503,16 +530,24 @@ export default function AdminMovieDashboard() {
           toast.error("Failed to load movies.");
         }
       } finally {
-        setLoading(false);
+        setLoading(false); // Ensure loading is false after fetch attempt
       }
     },
+    // Dependencies for useCallback
     [searchTerm, currentPage, itemsPerPage, sortColumn, sortDirection]
   );
 
+  // Effect to fetch initial data and options (genres/directors)
   useEffect(() => {
+    // Fetch genres and directors for the form
     const fetchOptions = async () => {
       try {
         const token = localStorage.getItem("token");
+        if (!token) {
+          // Handle missing token - maybe redirect to login or show error
+          console.error("Authentication token not found for fetching options.");
+          return;
+        }
         const [genreRes, directorRes] = await Promise.all([
           axios.get<Genre[]>(import.meta.env.VITE_GET_GENRES_URL!, {
             headers: { Authorization: `Bearer ${token}` },
@@ -538,33 +573,45 @@ export default function AdminMovieDashboard() {
       }
     };
     fetchOptions();
-  }, []);
 
+    // Initial fetch of movies
+    fetchMovies(); // Fetch movies on component mount
+  }, [fetchMovies]); // Depend on fetchMovies (which has its own dependencies)
+
+  // Effect for debouncing search term changes
   useEffect(() => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
 
     debounceTimeoutRef.current = setTimeout(() => {
-      fetchMovies();
-    }, 500);
+      // Only fetch movies if the search term has changed
+      // fetchMovies is already debounced via useCallback dependencies
+      // This outer effect ensures that *typing* triggers the debounced fetch
+      if (searchTerm !== undefined) {
+        // Ensure searchTerm is not undefined on initial render
+        fetchMovies();
+      }
+    }, 300); // Adjust debounce delay as needed (e.g., 300ms)
 
+    // Cleanup function for the timeout
     return () => {
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [fetchMovies, searchTerm]);
+  }, [searchTerm, fetchMovies]); // Depend on searchTerm and fetchMovies
 
+  // Reset page to 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
+  // Function to compute analytics (genres and directors) from the current movie list
   const computeAnalytics = (data: Movie[]) => {
     const genreCount: Record<string, number> = {};
     data.forEach((m) => {
       m.genres.forEach((g: Genre) => {
-        // Explicitly type 'g'
         const name = g.name;
         genreCount[name] = (genreCount[name] || 0) + 1;
       });
@@ -572,13 +619,12 @@ export default function AdminMovieDashboard() {
     const genresArray = Object.entries(genreCount)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .slice(0, 5); // Limit to top 5
     setTopGenresDisplayed(genresArray);
 
     const directorCount: Record<string, number> = {};
     data.forEach((m) => {
       m.directors.forEach((d: Director) => {
-        // Explicitly type 'd'
         const name = `${d.firstName} ${d.lastName}`;
         directorCount[name] = (directorCount[name] || 0) + 1;
       });
@@ -586,126 +632,153 @@ export default function AdminMovieDashboard() {
     const directorsArray = Object.entries(directorCount)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .slice(0, 5); // Limit to top 5
     setTopDirectorsDisplayed(directorsArray);
   };
 
+  // Handles sorting table columns
   const handleSort = (column: keyof Movie) => {
     if (sortColumn === column) {
+      // Toggle direction if clicking the same column
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
+      // Set new column and default to ascending
       setSortColumn(column);
       setSortDirection("asc");
     }
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to first page on sort change
   };
 
+  // Handles pagination page changes
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    if (page >= 1 && page <= Math.ceil(totalMoviesCount / itemsPerPage)) {
+      setCurrentPage(page);
+    }
   };
 
+  // Handles changes in items per page
   const handleItemsPerPageChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
     setItemsPerPage(Number(event.target.value));
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to first page when items per page changes
   };
 
+  // Handles updating a movie via API
   const handleUpdateMovie = async (movieData: EditableMovieData) => {
     try {
-      setLoading(true);
+      setLoading(true); // Show loading indicator
       const token = localStorage.getItem("token");
       if (!token) {
-        setError("Authentication token not found. Please log in.");
-        toast.error("Authentication token not found. Please log in.");
-        throw new Error("Authentication token not found.");
+        const authError = "Authentication token not found. Please log in.";
+        setError(authError);
+        toast.error(authError);
+        throw new Error(authError); // Throw to be caught by onSubmitFromForm
       }
+      // Prepare data for the API call, mapping genres/directors to simple arrays/objects
       await axios.patch(
         `${import.meta.env.VITE_UPDATE_MOVIE_URL!}/${movieData.id}`,
         {
           ...movieData,
-          genres: movieData.genres.map((g) => g.name),
+          genres: movieData.genres.map((g) => g.name), // Send only genre names
           directors: movieData.directors.map((d) => ({
             firstName: d.firstName,
             lastName: d.lastName,
-          })),
+          })), // Send first and last names
         },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
+      // Fetch fresh data after successful update
       await fetchMovies(true);
       toast.success("Movie updated successfully!");
+      // The modal will be closed by onSubmitFromForm's finally block
     } catch (err) {
       console.error("Error updating movie:", err);
       let errorMessage = "Failed to update movie.";
       if (axios.isAxiosError(err)) {
         errorMessage = err.response?.data?.error || errorMessage;
       }
-      setError(errorMessage);
-      toast.error(errorMessage);
-      throw err;
+      setError(errorMessage); // Set component-level error state
+      toast.error(errorMessage); // Show toast notification
+      throw err; // Re-throw to be caught by onSubmitFromForm
     } finally {
-      setLoading(false);
+      setLoading(false); // Hide loading indicator
     }
   };
 
+  // Handles adding a new movie via API
   const handleAddMovie = async (movieData: EditableMovieData) => {
     try {
-      setLoading(true);
+      setLoading(true); // Show loading indicator
       const token = localStorage.getItem("token");
       if (!token) {
-        setError("Authentication token not found. Please log in.");
-        toast.error("Authentication token not found. Please log in.");
-        throw new Error("Authentication token not found.");
+        const authError = "Authentication token not found. Please log in.";
+        setError(authError);
+        toast.error(authError);
+        throw new Error(authError); // Throw to be caught by onSubmitFromForm
       }
+      // Prepare data for the API call
       await axios.post(
         import.meta.env.VITE_CREATE_MOVIE_URL!,
         {
           ...movieData,
-          genres: movieData.genres.map((g) => g.name),
+          genres: movieData.genres.map((g) => g.name), // Send only genre names
           directors: movieData.directors.map((d) => ({
             firstName: d.firstName,
             lastName: d.lastName,
-          })),
+          })), // Send first and last names
         },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
+      // Fetch fresh data after successful addition
       await fetchMovies(true);
       toast.success("Movie added successfully!");
+      // The modal will be closed by onSubmitFromForm's finally block
     } catch (err) {
       console.error("Error adding movie:", err);
       let errorMessage = "Failed to add movie.";
       if (axios.isAxiosError(err)) {
         errorMessage = err.response?.data?.error || errorMessage;
       }
-      setError(errorMessage);
-      toast.error(errorMessage);
-      throw err;
+      setError(errorMessage); // Set component-level error state
+      toast.error(errorMessage); // Show toast notification
+      throw err; // Re-throw to be caught by onSubmitFromForm
     } finally {
-      setLoading(false);
+      setLoading(false); // Hide loading indicator
     }
   };
 
+  // Handles deleting a movie with confirmation
   const handleDeleteMovie = async (movieId: string) => {
     const result = await Swal.fire({
       title: "Are you sure?",
       text: "You won't be able to revert this!",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
+      confirmButtonColor: "#d33", // Keep color option
+      cancelButtonColor: "#3085d6", // Keep color option
       confirmButtonText: "Yes, delete it!",
+      background: "hsl(var(--b1))", // Match DaisyUI background
+      color: "hsl(var(--bc))", // Match DaisyUI text color
+      // Corrected: Use customClass for button styling
+      customClass: {
+        confirmButton: "btn btn-error", // Apply DaisyUI button classes
+        cancelButton: "btn btn-outline btn-accent ml-2", // Apply DaisyUI button classes
+      },
+      buttonsStyling: false, // Disable default styling to use custom classes
     });
 
     if (result.isConfirmed) {
       try {
-        setLoading(true);
+        setLoading(true); // Show loading indicator
         const token = localStorage.getItem("token");
         if (!token) {
           setError("Authentication token not found. Please log in.");
+          toast.error("Authentication token not found. Please log in.");
           return;
         }
         await axios.delete(
@@ -715,7 +788,7 @@ export default function AdminMovieDashboard() {
           }
         );
         toast.success("Movie deleted successfully!");
-        fetchMovies(true);
+        fetchMovies(true); // Refresh the movie list
       } catch (err) {
         console.error("Error deleting movie", err);
         if (axios.isAxiosError(err)) {
@@ -729,38 +802,45 @@ export default function AdminMovieDashboard() {
           toast.error("Failed to delete movie.");
         }
       } finally {
-        setLoading(false);
+        setLoading(false); // Hide loading indicator
       }
     }
   };
 
+  // Function called by MovieFormModal upon successful add/edit
   const handleFormSuccess = () => {
-    setIsFormModalOpen(false);
-    setEditingMovie(null);
+    // This function is now primarily for the parent to know when a successful operation occurred
+    // The modal closing logic is handled in MovieFormModal's finally block
+    setEditingMovie(null); // Clear editing state
+    // fetchMovies(true) is already called within handleAddMovie/handleUpdateMovie
   };
 
+  // Function called by MovieFormModal when cancelled or after submission (success/failure)
   const handleFormCancel = () => {
-    setIsFormModalOpen(false);
-    setEditingMovie(null);
+    setIsFormModalOpen(false); // Close the modal
+    setEditingMovie(null); // Clear editing state
   };
 
+  // Handles the click on the refresh button
   const handleRefreshClick = () => {
-    fetchMovies(true);
+    fetchMovies(true); // Force fetch from API
     toast.success("Refreshing movies...");
   };
 
   return (
     <div className="container mx-auto max-w-7xl p-4 md:p-6 bg-base-100 min-h-screen rounded-lg relative">
+      {/* Page Title and Action Buttons */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b-2 border-primary pb-3 space-y-4 md:space-y-0">
         <h1 className="text-2xl md:text-4xl font-bold text-base-content">
           Admin Movie Dashboard
         </h1>
         <div className="flex space-x-4">
+          {/* Refresh Button */}
           <button
             className="btn btn-outline btn-primary shadow-md"
             onClick={handleRefreshClick}
             aria-label="Refresh Movie List"
-            disabled={loading}
+            disabled={loading} // Disable while loading
           >
             {loading ? (
               <span className="loading loading-spinner loading-sm"></span>
@@ -769,36 +849,39 @@ export default function AdminMovieDashboard() {
             )}
             <span className="ml-2 hidden md:inline">Refresh</span>
           </button>
+          {/* Add New Movie Button */}
           <button
             className="btn btn-primary shadow-md"
             onClick={() => {
-              setEditingMovie(null);
-              setIsFormModalOpen(true);
+              setEditingMovie(null); // Clear any previous editing state
+              setIsFormModalOpen(true); // Open the modal for adding
             }}
             aria-label="Add New Movie"
-            disabled={isFormModalOpen}
+            disabled={isFormModalOpen} // Disable if modal is already open
           >
             Add New Movie
           </button>
         </div>
       </div>
 
+      {/* Movie Form Modal (conditionally rendered) */}
       <MovieFormModal
         isOpen={isFormModalOpen}
-        onClose={handleFormCancel}
-        onSuccess={handleFormSuccess}
-        movieToEdit={editingMovie}
+        onClose={handleFormCancel} // Pass the cancel handler (which now closes the modal)
+        onSuccess={handleFormSuccess} // Pass the success handler (for parent data refresh)
+        movieToEdit={editingMovie} // Pass the movie data if editing
         availableGenres={availableGenres}
         availableDirectors={availableDirectors}
-        onAddMovie={handleAddMovie}
-        onUpdateMovie={handleUpdateMovie}
+        onAddMovie={handleAddMovie} // Pass the add movie API function
+        onUpdateMovie={handleUpdateMovie} // Pass the update movie API function
       />
 
+      {/* Error Alert */}
       {error && (
         <div
           role="alert"
           className="alert alert-error mb-4 text-error-content"
-          aria-live="assertive"
+          aria-live="assertive" // Announce error to screen readers
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -814,22 +897,31 @@ export default function AdminMovieDashboard() {
             />
           </svg>
           <span>{error}</span>
+          {/* Retry button */}
           <button
             className="btn btn-sm btn-error ml-4 shadow-md"
-            onClick={() => fetchMovies(true)}
+            onClick={() => fetchMovies(true)} // Retry fetching movies
           >
             Retry
           </button>
         </div>
       )}
 
+      {/* Dashboard Analytics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <TotalMoviesCard count={totalMoviesCount} loading={loading} />
-        <GenresChart data={topGenresDisplayed} />
-        <DirectorsChart data={topDirectorsDisplayed} />
+        {/* Render charts only if data is available */}
+        {topGenresDisplayed.length > 0 && (
+          <GenresChart data={topGenresDisplayed} />
+        )}
+        {topDirectorsDisplayed.length > 0 && (
+          <DirectorsChart data={topDirectorsDisplayed} />
+        )}
       </div>
 
+      {/* Search, Pagination, and Items per Page Controls */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 space-y-4 md:space-y-0 md:space-x-6">
+        {/* Search Input */}
         <div className="form-control w-full md:w-auto">
           <input
             type="text"
@@ -841,6 +933,7 @@ export default function AdminMovieDashboard() {
           />
         </div>
         <div className="flex items-center space-x-4">
+          {/* Items per Page Select */}
           <div className="flex items-center space-x-2">
             <span className="text-base-content text-sm md:text-base">
               Items per page:
@@ -857,6 +950,7 @@ export default function AdminMovieDashboard() {
               <option value={50}>50</option>
             </select>
           </div>
+          {/* Pagination Controls */}
           <div className="join shadow-sm">
             <button
               className="join-item btn btn-outline btn-primary btn-sm md:btn-md"
@@ -884,6 +978,7 @@ export default function AdminMovieDashboard() {
         </div>
       </div>
 
+      {/* Movie List Table */}
       <MovieListTable
         movies={movies}
         loading={loading}
@@ -891,6 +986,7 @@ export default function AdminMovieDashboard() {
         sortDirection={sortDirection}
         onSort={handleSort}
         onDelete={handleDeleteMovie}
+        // Prepare movie data and open modal for editing
         onEditClick={(movie) => {
           const movieFormData: EditableMovieData = {
             id: movie.id,
@@ -899,11 +995,11 @@ export default function AdminMovieDashboard() {
             duration: movie.duration,
             description: movie.description,
             posterUrl: movie.posterUrl,
-            genres: movie.genres,
-            directors: movie.directors,
+            genres: movie.genres, // Pass existing genres
+            directors: movie.directors, // Pass existing directors
           };
-          setEditingMovie(movieFormData);
-          setIsFormModalOpen(true);
+          setEditingMovie(movieFormData); // Set movie to edit
+          setIsFormModalOpen(true); // Open the modal
         }}
       />
     </div>

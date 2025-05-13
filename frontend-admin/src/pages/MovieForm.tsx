@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   useForm,
-  Controller,
+  Controller, // Keep Controller import just in case, though not used for SearchableInput now
   type SubmitHandler,
   useFieldArray,
 } from "react-hook-form";
@@ -21,7 +21,11 @@ export interface EditableMovieData {
 
 interface MovieFormProps {
   movieToEdit: EditableMovieData | null;
+  // onSuccess is called when the form submission is successful (after API call)
+  // The modal parent component is responsible for refreshing data after onSuccess
   onSuccess: (data: EditableMovieData) => Promise<void>;
+  // onCancel is called when the user cancels the form (e.g., clicks Cancel button)
+  // The modal parent component is responsible for closing the modal after onCancel
   onCancel: () => void;
   availableGenres: { id?: string; name: string }[];
   availableDirectors: { id?: string; firstName: string; lastName: string }[];
@@ -74,6 +78,7 @@ const SearchableInput = <T,>({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
+    // If the input value changes and it no longer matches the current value's label, clear the value
     if (value && getOptionLabel(value) !== newValue) onChange(null);
     setShowSuggestions(true);
   };
@@ -82,22 +87,40 @@ const SearchableInput = <T,>({
     setInputValue(getOptionLabel(option));
     onChange(option);
     setShowSuggestions(false);
-    inputRef.current?.focus();
+    inputRef.current?.focus(); // Keep focus on input after selection
   };
 
   const handleBlur = (e: React.FocusEvent) => {
-    if (!suggestionsRef.current?.contains(e.relatedTarget as Node)) {
-      const input = inputValue.trim();
-      if (input) {
-        const existing = options.find(
-          (o) => getOptionLabel(o).toLowerCase() === input.toLowerCase()
-        );
-        onChange(existing || parseInput(input));
+    // Use a small timeout to allow click events on suggestions to register before closing
+    setTimeout(() => {
+      if (!suggestionsRef.current?.contains(e.relatedTarget as Node)) {
+        const input = inputValue.trim();
+        if (input) {
+          // Check if the trimmed input matches an existing option (case-insensitive)
+          const existing = options.find(
+            (o) => getOptionLabel(o).toLowerCase() === input.toLowerCase()
+          );
+          // If no existing option matches, parse the input as a new value
+          if (!existing) {
+            onChange(parseInput(input));
+          } else if (
+            !value ||
+            getOptionValue(value) !== getOptionValue(existing)
+          ) {
+            // If an existing option matches, and it's different from the current value, select it
+            onChange(existing);
+          }
+          // If an existing option matches and it's the same as the current value, do nothing
+        } else {
+          // If input is empty, clear the value
+          onChange(null);
+        }
+        setShowSuggestions(false);
       }
-      setShowSuggestions(false);
-    }
+    }, 100); // Small delay to allow click events
   };
 
+  // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -140,26 +163,45 @@ const SearchableInput = <T,>({
               key={getOptionValue(option) || index}
               type="button"
               className="w-full text-left p-3 hover:bg-primary/10 text-base-content flex items-center gap-2"
+              // Use onMouseDown to trigger before onBlur
               onMouseDown={() => handleOptionSelect(option)}
             >
               <span className="flex-1">{getOptionLabel(option)}</span>
             </button>
           ))}
-          {inputValue.trim() && !filteredOptions.length && (
-            <button
-              type="button"
-              className="w-full text-left p-3 hover:bg-primary/10 text-base-content italic flex items-center gap-2"
-              onMouseDown={() => {
-                onChange(parseInput(inputValue.trim()));
-                setInputValue(inputValue.trim());
-                setShowSuggestions(false);
-              }}
-            >
-              <span className="flex-1">
-                {addNewLabel} "{inputValue.trim()}"
-              </span>
-              <span className="badge badge-primary badge-sm">New</span>
-            </button>
+          {/* Option to add new if input doesn't match existing and is not empty */}
+          {inputValue.trim() &&
+            !filteredOptions.some(
+              (option) =>
+                getOptionLabel(option).toLowerCase() ===
+                inputValue.trim().toLowerCase()
+            ) && (
+              <button
+                type="button"
+                className="w-full text-left p-3 hover:bg-primary/10 text-base-content italic flex items-center gap-2"
+                onMouseDown={() => {
+                  // Use onMouseDown
+                  onChange(parseInput(inputValue.trim()));
+                  setInputValue(inputValue.trim()); // Keep the input value as is
+                  setShowSuggestions(false);
+                }}
+              >
+                <span className="flex-1">
+                  {addNewLabel} "{inputValue.trim()}"
+                </span>
+                <span className="badge badge-primary badge-sm">New</span>
+              </button>
+            )}
+          {/* If input is empty and no options, maybe show a message or nothing */}
+          {!inputValue.trim() && options.length > 0 && (
+            <div className="p-3 text-base-content italic">
+              Start typing to see suggestions...
+            </div>
+          )}
+          {!inputValue.trim() && options.length === 0 && (
+            <div className="p-3 text-base-content italic">
+              No existing options. Type to add a new one.
+            </div>
           )}
         </div>
       )}
@@ -169,8 +211,8 @@ const SearchableInput = <T,>({
 
 const MovieForm: React.FC<MovieFormProps> = ({
   movieToEdit,
-  onSuccess,
-  onCancel,
+  onSuccess, // This prop is onSubmitFromForm from MovieFormModal
+  onCancel, // This prop is handleCloseProp from MovieFormModal
   availableGenres,
   availableDirectors,
 }) => {
@@ -198,6 +240,7 @@ const MovieForm: React.FC<MovieFormProps> = ({
     remove: removeDirector,
   } = useFieldArray({ control, name: "directors" });
 
+  // Reset form when movieToEdit changes (for editing) or when modal is closed/opened
   useEffect(() => {
     reset(
       movieToEdit || {
@@ -212,11 +255,17 @@ const MovieForm: React.FC<MovieFormProps> = ({
     );
   }, [movieToEdit, reset]);
 
+  // This onSubmit is called by react-hook-form's handleSubmit
+  // It calls the onSuccess prop passed from MovieFormModal (which is onSubmitFromForm)
   const onSubmit: SubmitHandler<EditableMovieData> = async (data) => {
     try {
-      await onSuccess(data);
-    } catch {
-      toast.error("Failed to save movie");
+      await onSuccess(data); // Call the parent's submit handler (onSubmitFromForm)
+      // The modal will be closed by the parent's handler after this promise settles
+    } catch (error) {
+      // Error handling and toast are handled in the parent (onSubmitFromForm)
+      console.error("Error in MovieForm onSubmit:", error);
+      // Re-throw the error so it's caught by the parent's try/catch
+      throw error;
     }
   };
 
@@ -228,6 +277,7 @@ const MovieForm: React.FC<MovieFormProps> = ({
       if (exists) {
         toast.error(`Genre "${genre.name}" already exists`);
       } else {
+        // Append the new genre object
         appendGenre(genre);
       }
     }
@@ -236,17 +286,25 @@ const MovieForm: React.FC<MovieFormProps> = ({
   const handleAddDirector = (
     director: { id?: string; firstName: string; lastName: string } | null
   ) => {
+    // Ensure both first name or last name are present for a valid director entry
     if (director?.firstName || director?.lastName) {
+      const fullName = `${director.firstName || ""} ${
+        director.lastName || ""
+      }`.trim();
+      if (!fullName) {
+        toast.error("Director name cannot be empty.");
+        return;
+      }
+
       const exists = directorFields.some(
         (d) =>
-          `${d.firstName} ${d.lastName}`.toLowerCase() ===
-          `${director.firstName} ${director.lastName}`.toLowerCase()
+          `${d.firstName || ""} ${d.lastName || ""}`.trim().toLowerCase() ===
+          fullName.toLowerCase()
       );
       if (exists) {
-        toast.error(
-          `Director "${director.firstName} ${director.lastName}" exists`
-        );
+        toast.error(`Director "${fullName}" already exists`);
       } else {
+        // Append the new director object
         appendDirector(director);
       }
     }
@@ -290,6 +348,7 @@ const MovieForm: React.FC<MovieFormProps> = ({
                   value: new Date().getFullYear() + 2,
                   message: "Cannot be more than 2 years in future",
                 },
+                valueAsNumber: true, // Ensure year is treated as a number
               })}
               type="number"
               className="input input-primary input-bordered focus:ring-2 focus:ring-primary"
@@ -311,6 +370,7 @@ const MovieForm: React.FC<MovieFormProps> = ({
               {...register("duration", {
                 required: "Duration is required",
                 min: { value: 1, message: "Minimum 1 minute" },
+                valueAsNumber: true, // Ensure duration is treated as a number
               })}
               type="number"
               className="input input-primary input-bordered focus:ring-2 focus:ring-primary"
@@ -371,18 +431,18 @@ const MovieForm: React.FC<MovieFormProps> = ({
         {/* Genres */}
         <div className="form-control md:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Genres</h3>
+            <h3 className="text-lg font-semibold text-base-content">Genres</h3>
           </div>
           <div className="flex flex-wrap gap-3 mb-4">
             {genreFields.map((genre, index) => (
               <div
-                key={genre.id}
+                key={genre.id || `genre-${index}`} // Use index as fallback key if id is missing
                 className="badge badge-primary badge-lg gap-2 p-4"
               >
                 <span>{genre.name}</span>
                 <button
                   type="button"
-                  className="btn btn-circle btn-xs btn-ghost"
+                  className="btn btn-circle btn-xs btn-ghost text-base-content"
                   onClick={() => removeGenre(index)}
                 >
                   ✕
@@ -390,39 +450,36 @@ const MovieForm: React.FC<MovieFormProps> = ({
               </div>
             ))}
           </div>
-          <Controller
-            name="genres"
-            control={control}
-            render={() => (
-              <SearchableInput
-                label="Add Genre"
-                placeholder="Search or add genre..."
-                value={null}
-                options={availableGenres}
-                onChange={handleAddGenre}
-                getOptionLabel={(g) => g.name}
-                getOptionValue={(g) => g.id || g.name}
-                parseInput={(name) => ({ name })}
-              />
-            )}
+          {/* Removed Controller as it's not needed for this use case */}
+          <SearchableInput
+            label="Add Genre"
+            placeholder="Search or add genre..."
+            value={null} // SearchableInput manages its own input value
+            options={availableGenres}
+            onChange={handleAddGenre} // Call handleAddGenre when an option is selected or a new one is parsed
+            getOptionLabel={(g) => g.name}
+            getOptionValue={(g) => g.id || g.name}
+            parseInput={(name) => ({ name })} // Function to create a new genre object from input string
           />
         </div>
 
         {/* Directors */}
         <div className="form-control md:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Directors</h3>
+            <h3 className="text-lg font-semibold text-base-content">
+              Directors
+            </h3>
           </div>
           <div className="flex flex-wrap gap-3 mb-4">
             {directorFields.map((director, index) => (
               <div
-                key={director.id}
+                key={director.id || `director-${index}`} // Use index as fallback key
                 className="badge badge-secondary badge-lg gap-2 p-4"
               >
                 <span>{`${director.firstName} ${director.lastName}`}</span>
                 <button
                   type="button"
-                  className="btn btn-circle btn-xs btn-ghost"
+                  className="btn btn-circle btn-xs btn-ghost text-base-content"
                   onClick={() => removeDirector(index)}
                 >
                   ✕
@@ -430,24 +487,23 @@ const MovieForm: React.FC<MovieFormProps> = ({
               </div>
             ))}
           </div>
-          <Controller
-            name="directors"
-            control={control}
-            render={() => (
-              <SearchableInput
-                label="Add Director"
-                placeholder="Search or add director..."
-                value={null}
-                options={availableDirectors}
-                onChange={handleAddDirector}
-                getOptionLabel={(d) => `${d.firstName} ${d.lastName}`}
-                getOptionValue={(d) => d.id || `${d.firstName}-${d.lastName}`}
-                parseInput={(input) => {
-                  const [firstName, ...lastName] = input.split(" ");
-                  return { firstName, lastName: lastName.join(" ") };
-                }}
-              />
-            )}
+          {/* Removed Controller as it's not needed for this use case */}
+          <SearchableInput
+            label="Add Director"
+            placeholder="Search or add director..."
+            value={null} // SearchableInput manages its own input value
+            options={availableDirectors}
+            onChange={handleAddDirector} // Call handleAddDirector
+            getOptionLabel={(d) => `${d.firstName} ${d.lastName}`}
+            getOptionValue={(d) => d.id || `${d.firstName}-${d.lastName}`}
+            // Function to create a new director object from input string
+            parseInput={(input) => {
+              const parts = input.trim().split(" ");
+              const firstName = parts[0] || "";
+              const lastName = parts.slice(1).join(" ") || "";
+              // Return object with firstName and lastName
+              return { firstName, lastName };
+            }}
           />
         </div>
       </div>
@@ -457,7 +513,7 @@ const MovieForm: React.FC<MovieFormProps> = ({
         <button
           type="button"
           className="btn btn-outline btn-accent px-8"
-          onClick={onCancel}
+          onClick={onCancel} // Call the onCancel prop from the parent
         >
           <LuX className="mr-2" />
           Cancel
