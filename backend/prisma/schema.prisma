@@ -45,6 +45,7 @@ model Movie {
   genres      MovieGenre[]
   directors   MovieDirector[]
 
+  @@unique([title, year])
   @@index([title])
   @@index([year])
   @@map("movies")

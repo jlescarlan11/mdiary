@@ -30,6 +30,7 @@ interface ConfirmModalState {
 }
 
 // --- Environment Variables ---
+// Ensure these are correctly set in your .env file
 const API_GET_USERS_URL = import.meta.env.VITE_GET_ADMIN_USERS;
 const API_UPDATE_ROLE_URL = (userId: string) =>
   `${import.meta.env.VITE_GET_ADMIN_USERS}/${userId}`;
@@ -275,7 +276,10 @@ const UserManagement: React.FC = () => {
 
   // Handle page change
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    // Ensure page is within valid range
+    if (page >= 1 && page <= totalPages && !loading) {
+      setCurrentPage(page);
+    }
   };
 
   // Handle items per page change
@@ -376,6 +380,36 @@ const UserManagement: React.FC = () => {
     toast.success("Refreshing users...");
   };
 
+  // --- Pagination Logic ---
+  const renderPaginationButtons = () => {
+    const pageButtons = [];
+    const maxButtons = 5; // Maximum number of page buttons to display
+    const startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    const endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+    // Adjust startPage if endPage is limited by totalPages
+    const adjustedStartPage = Math.max(1, endPage - maxButtons + 1);
+
+    for (let i = adjustedStartPage; i <= endPage; i++) {
+      pageButtons.push(
+        <button
+          key={i}
+          className={`join-item btn ${
+            currentPage === i
+              ? "btn-active btn-primary"
+              : "btn-outline btn-primary"
+          }`}
+          onClick={() => handlePageChange(i)}
+          disabled={loading}
+          aria-label={`Go to page ${i}`}
+        >
+          {i}
+        </button>
+      );
+    }
+    return pageButtons;
+  };
+
   return (
     // Use a container with responsive max-width and padding
     <div className="container max-w-7xl mx-auto p-4 md:p-6 bg-base-100 min-h-screen rounded-lg ">
@@ -429,6 +463,7 @@ const UserManagement: React.FC = () => {
               <option value={50}>50</option>
             </select>
           </div>
+          {/* Updated Pagination Component */}
           <div className="join shadow-sm">
             <button
               className="join-item btn btn-outline btn-primary"
@@ -438,9 +473,7 @@ const UserManagement: React.FC = () => {
             >
               «
             </button>
-            <button className="join-item btn btn-outline border-primary text-primary pointer-events-none">
-              Page {currentPage} of {totalPages}
-            </button>
+            {renderPaginationButtons()} {/* Render the numbered page buttons */}
             <button
               className="join-item btn btn-outline btn-primary"
               onClick={() => handlePageChange(currentPage + 1)}
@@ -552,7 +585,7 @@ const UserManagement: React.FC = () => {
             </thead>
             <tbody>
               {/* Ensure users is an array before mapping */}
-              {Array.isArray(users) &&
+              {Array.isArray(users) && users.length > 0 ? (
                 users.map((user) => (
                   <tr
                     key={user.id}
@@ -636,105 +669,19 @@ const UserManagement: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="text-center py-6 text-base-content"
+                  >
+                    {loading ? "Loading users..." : "No users found."}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-          {/* Card view for small screens */}
-          <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
-            {" "}
-            {/* Show cards on small screens */}
-            {Array.isArray(users) &&
-              users.map((user) => (
-                <div
-                  key={user.id}
-                  className="card bg-base-100 shadow-md border border-base-300"
-                >
-                  <div className="card-body p-4">
-                    <div className="flex items-center space-x-4 mb-4">
-                      <div className="avatar">
-                        <div className="mask mask-squircle w-12 h-12 bg-base-300 flex items-center justify-center text-base-content text-xl font-bold overflow-hidden">
-                          {user.photoUrl ? (
-                            <img
-                              src={user.photoUrl}
-                              alt={`${user.username}'s profile`}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span>{user.username.charAt(0).toUpperCase()}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <h2 className="card-title text-base-content text-lg">
-                          {user.username}
-                        </h2>
-                        <p className="text-base-content text-sm">
-                          {user.email}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-base-content text-sm mb-4">
-                      <p>
-                        <span className="font-semibold">Role:</span>{" "}
-                        <span
-                          className={`badge ${
-                            user.role === "ADMIN"
-                              ? "badge-secondary"
-                              : "badge-neutral"
-                          } badge-md`}
-                        >
-                          {user.role}
-                        </span>
-                      </p>
-                      <p>
-                        <span className="font-semibold">Entries:</span>{" "}
-                        {user.entriesCount}
-                      </p>
-                      <p>
-                        <span className="font-semibold">Joined:</span>{" "}
-                        {format(new Date(user.createdAt), "PPP")}
-                      </p>
-                    </div>
-
-                    <div className="card-actions justify-end">
-                      {/* Update Role Button with Icon */}
-                      <button
-                        className={`btn btn-ghost btn-sm ${
-                          user.role === "USER" ? "text-primary" : "text-warning"
-                        }`}
-                        onClick={() => handleOpenUpdateRoleConfirm(user)} // Open modal
-                        aria-label={`Change role of ${user.username}`}
-                        title={
-                          user.id === currentUserId
-                            ? "You cannot change your own role"
-                            : user.role === "USER"
-                            ? "Make Admin"
-                            : "Make User"
-                        } // Update tooltip for disabled state
-                        disabled={user.id === currentUserId} // Disable if it's the logged-in user
-                      >
-                        <LuPencil className="h-4 w-4" />
-                      </button>
-                      {/* Delete Button with Icon */}
-                      <button
-                        className="btn btn-ghost btn-sm text-error"
-                        onClick={() => handleOpenDeleteUserConfirm(user)} // Open modal
-                        aria-label={`Delete ${user.username}`}
-                        title={
-                          user.id === currentUserId
-                            ? "You cannot delete your own account"
-                            : `Delete ${user.username}`
-                        } // Update tooltip for disabled state
-                        disabled={user.id === currentUserId} // Disable if it's the logged-in user
-                      >
-                        <LuTrash className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
         </div>
       )}
 
