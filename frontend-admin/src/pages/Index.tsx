@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom"; // Removed unused imports: useParams, useLocation
 
 interface Movie {
   id: string;
@@ -326,14 +326,15 @@ const MovieCarousel = () => {
     navigate("/discover");
   };
 
-  // Navigate to specific genre
-  const navigateToGenre = (genre: string) => {
-    navigate(`/genres/${encodeURIComponent(genre)}`);
-  };
-
   // Navigate to movie detail
   const navigateToMovie = (movieId: string) => {
     navigate(`/movie/${movieId}`);
+  };
+
+  // Handle errors for image loading
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    (e.target as HTMLImageElement).src =
+      "https://placehold.co/800x1200?text=No+Poster";
   };
 
   if (loading) {
@@ -376,6 +377,10 @@ const MovieCarousel = () => {
 
   const visibleMovies = getVisibleMovies();
 
+  // Determine grid columns based on screen size for movie cards
+  const movieCardGridClasses =
+    "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6";
+
   return (
     <div className="container max-w-7xl mx-auto px-4 space-y-16">
       <section className="relative overflow-hidden py-8 sm:py-12 flex flex-col space-y-10 items-center">
@@ -414,22 +419,28 @@ const MovieCarousel = () => {
 
             if (visibleItemsCount === 5) {
               if (position === 0) {
-                scaleClass = "scale-110";
+                scaleClass = "scale-100";
                 opacityClass = "opacity-100";
                 zIndexClass = "z-20";
-                widthClass = "w-4/12";
-                marginClass = "mx-2 sm:mx-4";
-              } else if (position === -1 || position === 1) {
-                scaleClass = "scale-100";
-                opacityClass = "opacity-85";
-                zIndexClass = "z-10";
                 widthClass = "w-3/12";
-                marginClass = "mx-1 sm:mx-2";
-              } else {
-                scaleClass = "scale-90";
-                opacityClass = "opacity-70";
-                zIndexClass = "z-0";
+                marginClass = "";
+              } else if (position === -1 || position === 1) {
+                scaleClass = "scale-95";
+                opacityClass = "opacity-80";
+                zIndexClass = "z-10";
                 widthClass = "w-2/12";
+                marginClass = "";
+              } else if (position === -2 || position === 2) {
+                scaleClass = "scale-90";
+                opacityClass = "opacity-60";
+                zIndexClass = "z-10";
+                widthClass = "w-2/12";
+                marginClass = "";
+              } else {
+                scaleClass = "scale-80";
+                opacityClass = "opacity-40";
+                zIndexClass = "z-0";
+                widthClass = "w-1/12";
                 marginClass = "mx-0.5 sm:mx-1";
               }
             } else if (visibleItemsCount === 3) {
@@ -451,9 +462,9 @@ const MovieCarousel = () => {
             return (
               <div
                 key={`${movie.id}-${index}`}
-                className={`flex-shrink-0 px-1 sm:px-2 ${scaleClass} ${opacityClass} ${zIndexClass} ${widthClass} ${marginClass} will-change-transform`}
+                className={`flex-shrink-0 ${scaleClass} ${opacityClass} ${zIndexClass} ${widthClass} ${marginClass} will-change-transform`}
                 style={{
-                  height: "24rem",
+                  height: "20rem",
                   transition: "all 0.45s cubic-bezier(0.25, 0.1, 0.25, 1)",
                 }}
               >
@@ -463,10 +474,7 @@ const MovieCarousel = () => {
                       src={movie.posterUrl}
                       alt={`Poster for ${movie.title}`}
                       className="w-full h-full object-cover rounded-box transition-transform duration-500 ease-out group-hover:scale-105"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          "https://placehold.co/800x400?text=No+Poster";
-                      }}
+                      onError={(e) => handleImageError(e)}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100 rounded-box" />
                   </figure>
@@ -491,7 +499,7 @@ const MovieCarousel = () => {
         </div>
 
         {data.popularMovies.length > 1 && (
-          <div className="flex justify-center mt-8 space-x-2.5">
+          <div className="flex justify-center mt-4 space-x-2.5">
             {data.popularMovies.map((_, index) => (
               <button
                 key={index}
@@ -520,47 +528,34 @@ const MovieCarousel = () => {
             VIEW ALL
           </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+        <div className={`${movieCardGridClasses}`}>
           {genreMovies.map((item) => (
             <div
               key={`${item.genreName}-${item.movie.id}`}
-              className="group relative overflow-hidden rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300"
+              className="aspect-[2/3] rounded-lg overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
+              onClick={() => navigateToMovie(item.movie.id)}
             >
-              <div
-                className="absolute top-0 left-0 right-0 bg-gradient-to-b from-neutral-800/90 to-transparent p-3 z-10"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigateToGenre(item.genreName);
-                }}
-              >
-                <h3 className="text-md font-semibold text-white hover:underline">
-                  {item.genreName}
-                </h3>
-              </div>
+              <img
+                src={item.movie.posterUrl}
+                alt={`${item.movie.title} - ${item.genreName}`}
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                onError={(e) => handleImageError(e)}
+              />
 
-              <div
-                className="h-80 overflow-hidden"
-                onClick={() => navigateToMovie(item.movie.id)}
-              >
-                <img
-                  src={item.movie.posterUrl}
-                  alt={`${item.movie.title} - ${item.genreName}`}
-                  className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://placehold.co/800x400?text=No+Poster";
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100" />
-              </div>
+              {item.movie.rating !== undefined && (
+                <div className="absolute top-2 right-2">
+                  <div className="badge badge-primary">
+                    {item.movie.rating.toFixed(1)}
+                  </div>
+                </div>
+              )}
 
-              <div
-                className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center"
-                onClick={() => navigateToMovie(item.movie.id)}
-              >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
+
+              <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
                 <div className="px-3 py-1 rounded mx-auto inline-block">
                   <h3 className="text-sm font-medium leading-tight">
-                    {item.movie.title}
+                    {item.movie.title} ({item.movie.year})
                   </h3>
                 </div>
               </div>
@@ -576,25 +571,29 @@ const MovieCarousel = () => {
             DISCOVER MORE
           </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+        <div className={`${movieCardGridClasses}`}>
           {limitedRandomMovies.map((movie) => (
             <div
               key={movie.id}
-              className="group relative overflow-hidden rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300"
+              className="aspect-[2/3] rounded-lg overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
               onClick={() => navigateToMovie(movie.id)}
             >
-              <div className="h-80 overflow-hidden">
-                <img
-                  src={movie.posterUrl}
-                  alt={movie.title}
-                  className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://placehold.co/800x400?text=No+Poster";
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100" />
-              </div>
+              <img
+                src={movie.posterUrl}
+                alt={movie.title}
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                onError={(e) => handleImageError(e)}
+              />
+
+              {movie.rating !== undefined && (
+                <div className="absolute top-2 right-2">
+                  <div className="badge badge-primary">
+                    {movie.rating.toFixed(1)}
+                  </div>
+                </div>
+              )}
+
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
 
               <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
                 {movie.genreNames && movie.genreNames.length > 0 && (
@@ -606,7 +605,7 @@ const MovieCarousel = () => {
                 )}
                 <div className="px-3 py-1 rounded mx-auto inline-block">
                   <h3 className="text-sm font-medium leading-tight">
-                    {movie.title}
+                    {movie.title} ({movie.year})
                   </h3>
                 </div>
               </div>
