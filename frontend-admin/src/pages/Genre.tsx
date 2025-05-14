@@ -308,12 +308,13 @@ const GenrePage = () => {
                     onError={(e) => handleImageError(e, false)}
                   />
                 )}
+                <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100 rounded-box" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+
                 <div className="absolute inset-x-0 bottom-0 p-4 text-center">
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="bg-neutral text-neutral-content px-2 py-0.5 text-xs max-w-fit mx-auto font-medium rounded">
                     {group.genreName}
                   </h2>
-                  <p className="text-white/80">{group.movies.length} movies</p>
                 </div>
               </div>
             ))}
@@ -386,6 +387,9 @@ const GenrePage = () => {
                     onError={(e) => handleImageError(e)}
                   />
 
+                  <div className="absolute inset-0 bg-gradient-to-t from-neutral via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+
                   {movie.rating !== undefined && (
                     <div className="absolute top-2 right-2">
                       <div className="badge badge-primary">
@@ -399,7 +403,7 @@ const GenrePage = () => {
                   <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
                     <div className="px-3 py-1 rounded mx-auto inline-block">
                       <h3 className="text-sm font-medium leading-tight">
-                        {movie.title} ({movie.year})
+                        {movie.title}
                       </h3>
                     </div>
                   </div>

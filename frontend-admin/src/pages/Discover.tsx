@@ -257,6 +257,9 @@ const DiscoverPage = () => {
                   onError={(e) => handleImageError(e)}
                 />
 
+                <div className="absolute inset-0 bg-gradient-to-t from-neutral via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+
                 {movie.rating !== undefined && (
                   <div className="absolute top-2 right-2">
                     <div className="badge badge-primary">
@@ -268,16 +271,9 @@ const DiscoverPage = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
 
                 <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
-                  {movie.genreNames && movie.genreNames.length > 0 && (
-                    <div className="mb-1.5">
-                      <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
-                        {movie.genreNames.slice(0, 2).join(" ")}
-                      </span>
-                    </div>
-                  )}
                   <div className="px-3 py-1 rounded mx-auto inline-block">
                     <h3 className="text-sm font-medium leading-tight">
-                      {movie.title} ({movie.year})
+                      {movie.title}
                     </h3>
                   </div>
                 </div>

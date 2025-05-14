@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom"; // Removed unused imports: useParams, useLocation
+import { useNavigate } from "react-router-dom";
 
+// Define interfaces for data structures
 interface Movie {
   id: string;
   title: string;
@@ -16,7 +17,7 @@ interface Movie {
     DiaryEntry?: number;
   };
   rating?: number;
-  genreNames?: string[];
+  genreNames?: string[]; // Added for transformed data
 }
 
 interface ApiResponse {
@@ -31,6 +32,7 @@ interface GenreMovie {
 }
 
 const MovieCarousel = () => {
+  // State variables
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +52,11 @@ const MovieCarousel = () => {
   const [skipTransition, setSkipTransition] = useState(false);
   const [genreMovies, setGenreMovies] = useState<GenreMovie[]>([]);
   const [limitedRandomMovies, setLimitedRandomMovies] = useState<Movie[]>([]);
+
+  // Hook for navigation
   const navigate = useNavigate();
 
+  // Effect to fetch movie data on component mount
   useEffect(() => {
     const fetchMovies = async () => {
       try {
@@ -75,17 +80,21 @@ const MovieCarousel = () => {
     };
 
     fetchMovies();
+    // Update visible items count on mount and window resize
     updateVisibleItemsCount();
     window.addEventListener("resize", updateVisibleItemsCount);
 
+    // Cleanup listener on component unmount
     return () => window.removeEventListener("resize", updateVisibleItemsCount);
-  }, []);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
+  // Effect to process fetched data for genre and random movies
   useEffect(() => {
     if (data?.newestPerGenre) {
       const usedMovieIds = new Set<string>();
       const genreToMoviesMap = new Map<string, Movie[]>();
 
+      // Group movies by genre
       data.newestPerGenre.forEach((movie) => {
         if (movie.genres && movie.genres.length > 0) {
           movie.genres.forEach((genreObj) => {
@@ -98,16 +107,19 @@ const MovieCarousel = () => {
         }
       });
 
+      // Sort genres by the number of movies, descending
       const sortedGenres = Array.from(genreToMoviesMap.keys()).sort(
         (a, b) =>
           (genreToMoviesMap.get(b)?.length || 0) -
           (genreToMoviesMap.get(a)?.length || 0)
       );
 
+      // Select top 10 genres
       const topGenres = sortedGenres.slice(0, 10);
 
       const genreMoviesArray: GenreMovie[] = [];
 
+      // Select one unique movie per top genre
       topGenres.forEach((genreName) => {
         const moviesForGenre = genreToMoviesMap.get(genreName) || [];
 
@@ -136,83 +148,95 @@ const MovieCarousel = () => {
         }))
         .sort((a, b) => a.sortValue - b.sortValue)
         .map((item) => item.movie)
-        .slice(0, 10);
+        .slice(0, 10); // Limit to 10 random movies
 
       setLimitedRandomMovies(pseudoRandomMovies);
     }
-  }, [data]);
+  }, [data]); // Rerun when data changes
 
+  // Function to update the number of visible items based on window width
   const updateVisibleItemsCount = () => {
     if (window.innerWidth < 768) {
-      setVisibleItemsCount(3);
+      setVisibleItemsCount(3); // Mobile: 3 items visible
     } else {
-      setVisibleItemsCount(5);
+      setVisibleItemsCount(5); // Desktop/Tablet: 5 items visible
     }
   };
 
+  // Effect for automatic carousel sliding
   useEffect(() => {
     const popularMovies = data?.popularMovies;
+    // Only start interval if there are movies and not dragging/swiping
     if (!popularMovies || popularMovies.length <= 1) return;
 
     const interval = setInterval(() => {
-      if (mouseDown || swipeOffset !== 0) return;
-      setTransitioning(true);
+      if (mouseDown || swipeOffset !== 0) return; // Pause on drag/swipe
+      setTransitioning(true); // Start transition animation
       setTimeout(() => {
+        // Move to the next index after a short delay
         setCurrentIndex((prev) => (prev + 1) % popularMovies.length);
-        setTransitioning(false);
-      }, 300);
-    }, 5000);
+        setTransitioning(false); // End transition animation
+      }, 300); // Match CSS transition duration
+    }, 5000); // Auto-slide every 5 seconds
 
+    // Cleanup interval on component unmount or dependencies change
     return () => clearInterval(interval);
-  }, [data?.popularMovies, currentIndex, mouseDown, swipeOffset]);
+  }, [data?.popularMovies, currentIndex, mouseDown, swipeOffset]); // Rerun when these dependencies change
+
+  // --- Touch and Mouse Event Handlers for Carousel Swipe ---
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (transitioning) return;
-    setIsDragging(true);
+    if (transitioning) return; // Prevent interaction during transition
+    setIsDragging(true); // Indicate dragging started
     const touch = e.targetTouches[0];
-    setTouchStart(touch.clientX);
-    setTouchEnd(touch.clientX);
-    dragStartX.current = touch.clientX;
-    lastDragX.current = touch.clientX;
-    velocityX.current = 0;
+    setTouchStart(touch.clientX); // Record start position
+    setTouchEnd(touch.clientX); // Initialize end position
+    dragStartX.current = touch.clientX; // Record initial drag position
+    lastDragX.current = touch.clientX; // Record last drag position for velocity calculation
+    velocityX.current = 0; // Reset velocity
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
+    if (!isDragging) return; // Only process if dragging
     const touch = e.targetTouches[0];
-    setTouchEnd(touch.clientX);
+    setTouchEnd(touch.clientX); // Update end position
 
+    // Calculate velocity
     velocityX.current = touch.clientX - lastDragX.current;
     lastDragX.current = touch.clientX;
 
+    // Calculate and apply damped swipe offset
     const delta = touch.clientX - dragStartX.current;
-    const dampedDelta = delta * 0.8;
+    const dampedDelta = delta * 0.8; // Apply damping
     setSwipeOffset(dampedDelta);
   };
 
   const handleTouchEnd = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
+    if (!isDragging) return; // Only process if dragging
+    setIsDragging(false); // Indicate dragging ended
 
     const swipeDistance = touchEnd - touchStart;
     const swipeVelocity = velocityX.current;
-    const threshold = 50;
-    const velocityThreshold = 1;
+    const threshold = 50; // Distance threshold for swipe
+    const velocityThreshold = 1; // Velocity threshold for swipe
 
+    // Determine swipe direction based on distance or velocity
     if (
       Math.abs(swipeDistance) > threshold ||
       Math.abs(swipeVelocity) > velocityThreshold
     ) {
       if (swipeDistance < 0 || swipeVelocity < -velocityThreshold) {
-        animateToNextSlide("next");
+        animateToNextSlide("next"); // Swipe left -> next slide
       } else if (swipeDistance > 0 || swipeVelocity > velocityThreshold) {
-        animateToNextSlide("prev");
+        animateToNextSlide("prev"); // Swipe right -> previous slide
       }
     } else {
-      animateSwipeReset();
+      animateSwipeReset(); // If not a strong swipe, reset position
     }
+    setSwipeOffset(0); // Reset swipe offset state (animation handles visual reset)
   };
 
+  // Mouse event handlers mirror touch handlers for desktop dragging
   const handleMouseDown = (e: React.MouseEvent) => {
     if (transitioning) return;
     setMouseDown(true);
@@ -238,54 +262,63 @@ const MovieCarousel = () => {
 
   const handleMouseUp = () => {
     if (mouseDown) {
-      handleTouchEnd();
+      handleTouchEnd(); // Trigger touch end logic on mouse up
       setMouseDown(false);
     }
   };
 
+  // Animation function to move to the next/previous slide
   const animateToNextSlide = (direction: "next" | "prev") => {
     if (!data?.popularMovies) return;
-    setTransitioning(true);
+    setTransitioning(true); // Start transition
 
     const totalMovies = data.popularMovies.length;
+    // Calculate the new index, wrapping around
     const newIndex =
       direction === "next"
         ? (currentIndex + 1) % totalMovies
         : (currentIndex - 1 + totalMovies) % totalMovies;
 
+    // Briefly skip transition for immediate index change, then re-enable for animation
     setSkipTransition(true);
-    setSwipeOffset(0);
+    setSwipeOffset(0); // Reset visual swipe offset immediately
     setTimeout(() => {
       setSkipTransition(false);
-      setCurrentIndex(newIndex);
-      setTransitioning(false);
-    }, 50);
+      setCurrentIndex(newIndex); // Update index
+      setTransitioning(false); // End transition
+    }, 50); // Short delay
   };
 
+  // Animation function to reset swipe offset smoothly
   const animateSwipeReset = () => {
     const startOffset = swipeOffset;
     const startTime = performance.now();
-    const duration = 300;
+    const duration = 300; // Animation duration
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = Math.min(elapsed / duration, 1); // Animation progress (0 to 1)
 
+      // Use an easing function (easeOutCubic) for smooth deceleration
       const easeOutCubic = 1 - Math.pow(1 - progress, 3);
 
+      // Update swipe offset based on easing
       setSwipeOffset(startOffset * (1 - easeOutCubic));
 
+      // Continue animation until progress is complete
       if (progress < 1) {
         animationFrameId.current = requestAnimationFrame(animate);
       }
     };
 
+    // Cancel any existing animation frame before starting a new one
     if (animationFrameId.current) {
       cancelAnimationFrame(animationFrameId.current);
     }
-    animationFrameId.current = requestAnimationFrame(animate);
+    animationFrameId.current = requestAnimationFrame(animate); // Start animation loop
   };
 
+  // Cleanup animation frame on component unmount
   useEffect(() => {
     return () => {
       if (animationFrameId.current) {
@@ -294,23 +327,28 @@ const MovieCarousel = () => {
     };
   }, []);
 
+  // Function to transform raw movie data (add genreNames and calculated rating)
   const transformMovies = (movies: Movie[]) => {
     return movies.map((movie) => ({
       ...movie,
       genreNames: movie.genres?.map((g) => g.genre.name) || [],
+      // Calculate a dummy rating based on DiaryEntry count (example logic)
       rating: movie._count?.DiaryEntry
-        ? Math.min(10, Math.max(1, movie._count.DiaryEntry / 2))
+        ? Math.min(10, Math.max(1, movie._count.DiaryEntry / 2)) // Scale count to 1-10
         : undefined,
     }));
   };
 
+  // Function to get the movies currently visible in the carousel
   const getVisibleMovies = () => {
     if (!data?.popularMovies || data.popularMovies.length === 0) return [];
     const transformed = transformMovies(data.popularMovies);
     const totalMovies = transformed.length;
     const visible = [];
+    // Calculate offset to center the current index
     const offset = Math.floor(visibleItemsCount / 2);
 
+    // Get movies around the current index, including one extra on each side for smooth wrapping
     for (let i = -1; i < visibleItemsCount + 1; i++) {
       const index = (currentIndex + i - offset + totalMovies) % totalMovies;
       visible.push(transformed[index]);
@@ -318,6 +356,7 @@ const MovieCarousel = () => {
     return visible;
   };
 
+  // Navigation handlers
   const handleViewAllGenres = () => {
     navigate("/genres");
   };
@@ -326,17 +365,18 @@ const MovieCarousel = () => {
     navigate("/discover");
   };
 
-  // Navigate to movie detail
+  // Navigate to movie detail page
   const navigateToMovie = (movieId: string) => {
     navigate(`/movie/${movieId}`);
   };
 
-  // Handle errors for image loading
+  // Handle errors for image loading by showing a placeholder
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     (e.target as HTMLImageElement).src =
-      "https://placehold.co/800x1200?text=No+Poster";
+      "https://placehold.co/800x1200?text=No+Poster"; // Placeholder image URL
   };
 
+  // --- Loading, Error, and No Data States ---
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -351,7 +391,7 @@ const MovieCarousel = () => {
       <div className="alert alert-error max-w-md mx-auto">
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          className="stroke-current shrink-0 h-6 w-6"
+          className="stroke-current shrink-0 h-8 w-8"
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -375,41 +415,53 @@ const MovieCarousel = () => {
     );
   }
 
+  // Get movies to display in the carousel
   const visibleMovies = getVisibleMovies();
 
   // Determine grid columns based on screen size for movie cards
   const movieCardGridClasses =
-    "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6";
+    "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4";
 
+  // --- Render the Component ---
   return (
     <div className="container max-w-7xl mx-auto px-4 space-y-16">
+      {/* Welcome Section with Popular Movies Carousel */}
       <section className="relative overflow-hidden py-8 sm:py-12 flex flex-col space-y-10 items-center">
         <div className="text-center">
-          <h1 className="text-2xl sm:text-4xl text-center font-bold">
+          {/* Responsive H1 */}
+          <h1 className="text-2xl sm:text-3xl md:text-4xl text-center font-bold">
             Welcome to SineMemoria!
           </h1>
-          <span>Dive into this week's hottest movies.</span>
+          {/* Responsive subtitle */}
+          <span className="text-sm sm:text-base md:text-lg">
+            Dive into this week's hottest movies.
+          </span>
         </div>
+        {/* Carousel Container */}
         <div
           ref={carouselRef}
           className="flex justify-center items-end -mx-2 sm:-mx-4 select-none"
           style={{
             transform: `translateX(${swipeOffset}px)`,
             cursor: isDragging ? "grabbing" : "grab",
+            // Apply transition only when not dragging or skipping
             transition:
               skipTransition || transitioning
                 ? "none"
                 : "transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)",
           }}
+          // Add touch and mouse event listeners for dragging
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={handleMouseUp} // End drag if mouse leaves the element
         >
+          {/* Map over visible movies to display carousel items */}
           {visibleMovies.map((movie, index) => {
+            // Calculate position relative to the center item
             const position = index - (Math.floor(visibleItemsCount / 2) + 1);
             let scaleClass = "";
             let opacityClass = "";
@@ -417,6 +469,7 @@ const MovieCarousel = () => {
             let widthClass = "";
             let marginClass = "";
 
+            // Apply dynamic classes based on position and visible items count
             if (visibleItemsCount === 5) {
               if (position === 0) {
                 scaleClass = "scale-100";
@@ -460,25 +513,32 @@ const MovieCarousel = () => {
             }
 
             return (
+              // Carousel Item Container
               <div
                 key={`${movie.id}-${index}`}
                 className={`flex-shrink-0 ${scaleClass} ${opacityClass} ${zIndexClass} ${widthClass} ${marginClass} will-change-transform`}
                 style={{
-                  height: "20rem",
-                  transition: "all 0.45s cubic-bezier(0.25, 0.1, 0.25, 1)",
+                  height: "20rem", // Fixed height for carousel items
+                  transition: "all 0.45s cubic-bezier(0.25, 0.1, 0.25, 1)", // Smooth transition for scaling and opacity
                 }}
               >
+                {/* Movie Card within Carousel */}
                 <div className="card bg-base-100 shadow-xl h-full group relative rounded-box overflow-hidden">
                   <figure className="relative h-full rounded-box overflow-hidden">
+                    {/* Movie Poster Image */}
                     <img
                       src={movie.posterUrl}
                       alt={`Poster for ${movie.title}`}
                       className="w-full h-full object-cover rounded-box transition-transform duration-500 ease-out group-hover:scale-105"
-                      onError={(e) => handleImageError(e)}
+                      onError={(e) => handleImageError(e)} // Handle image load errors
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100 rounded-box" />
+                    {/* Gradient Overlays for Text Readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-neutral via-transparent to-transparent opacity-100 rounded-box" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
                   </figure>
+                  {/* Movie Info Overlay */}
                   <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+                    {/* Genre Names */}
                     {movie.genreNames && movie.genreNames.length > 0 && (
                       <div className="mb-1.5">
                         <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
@@ -486,7 +546,9 @@ const MovieCarousel = () => {
                         </span>
                       </div>
                     )}
-                    <div className="px-3 py-1 rounded mx-auto inline-block">
+                    {/* Movie Title (text-xs) */}
+                    <div className=" rounded mx-auto inline-block">
+                      {/* Set text size to text-xs for carousel title */}
                       <h2 className="text-xs font-medium leading-tight">
                         {movie.title}
                       </h2>
@@ -498,6 +560,7 @@ const MovieCarousel = () => {
           })}
         </div>
 
+        {/* Carousel Navigation Dots */}
         {data.popularMovies.length > 1 && (
           <div className="flex justify-center mt-4 space-x-2.5">
             {data.popularMovies.map((_, index) => (
@@ -510,38 +573,50 @@ const MovieCarousel = () => {
                 }}
                 className={`w-2.5 h-2.5 rounded-full transition-all duration-350 ease-out hover:opacity-75 ${
                   currentIndex === index
-                    ? "bg-primary scale-125"
-                    : "bg-gray-300 scale-100"
+                    ? "bg-primary scale-125" // Active dot style
+                    : "bg-gray-300 scale-100" // Inactive dot style
                 } ${transitioning ? "opacity-50" : "opacity-100"}`}
                 aria-label={`Go to movie ${index + 1}`}
-                disabled={transitioning}
+                disabled={transitioning} // Disable clicks during transition
               />
             ))}
           </div>
         )}
       </section>
 
-      <section className="space-y-6">
+      {/* New Movies By Genre Section */}
+      <section className="space-y-8">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">New Movies By Genre</h2>
+          {/* Responsive H2 */}
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">
+            New Movies By Genre
+          </h2>
           <button className="btn btn-ghost" onClick={handleViewAllGenres}>
             VIEW ALL
           </button>
         </div>
+        {/* Grid for Genre Movies */}
         <div className={`${movieCardGridClasses}`}>
           {genreMovies.map((item) => (
             <div
               key={`${item.genreName}-${item.movie.id}`}
-              className="aspect-[2/3] rounded-lg overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
-              onClick={() => navigateToMovie(item.movie.id)}
+              className="aspect-[2/3] rounded-box overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
+              onClick={() => navigateToMovie(item.movie.id)} // Navigate on click
             >
-              <img
-                src={item.movie.posterUrl}
-                alt={`${item.movie.title} - ${item.genreName}`}
-                className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                onError={(e) => handleImageError(e)}
-              />
+              <figure className="relative h-full rounded-box overflow-hidden">
+                {/* Movie Poster */}
+                <img
+                  src={item.movie.posterUrl}
+                  alt={`${item.movie.title} - ${item.genreName}`}
+                  className="w-full h-full object-cover rounded-box transition-transform duration-500 ease-out group-hover:scale-105"
+                  onError={(e) => handleImageError(e)}
+                />
+                {/* Gradient Overlays */}
+                <div className="absolute inset-0 bg-gradient-to-t from-neutral via-transparent to-transparent " />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+              </figure>
 
+              {/* Rating Badge */}
               {item.movie.rating !== undefined && (
                 <div className="absolute top-2 right-2">
                   <div className="badge badge-primary">
@@ -550,12 +625,22 @@ const MovieCarousel = () => {
                 </div>
               )}
 
+              {/* Hover Overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
 
+              {/* Movie Info Overlay */}
               <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
-                <div className="px-3 py-1 rounded mx-auto inline-block">
-                  <h3 className="text-sm font-medium leading-tight">
-                    {item.movie.title} ({item.movie.year})
+                {/* Display Genre Name */}
+                <div className="mb-1.5">
+                  <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
+                    {item.genreName}
+                  </span>
+                </div>
+                {/* Movie Title and Year (text-xs) */}
+                <div className=" rounded mx-auto inline-block">
+                  {/* Set text size to text-xs for genre movie title */}
+                  <h3 className="text-xs font-medium leading-tight">
+                    {item.movie.title}
                   </h3>
                 </div>
               </div>
@@ -564,27 +649,37 @@ const MovieCarousel = () => {
         </div>
       </section>
 
-      <section className="space-y-6">
+      {/* You Might Like Section (Random Movies) */}
+      <section className="space-y-8">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">You Might Like</h2>
+          {/* Responsive H2 */}
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">
+            You Might Like
+          </h2>
           <button className="btn btn-ghost" onClick={handleDiscoverMore}>
             DISCOVER MORE
           </button>
         </div>
+        {/* Grid for Random Movies */}
         <div className={`${movieCardGridClasses}`}>
           {limitedRandomMovies.map((movie) => (
             <div
               key={movie.id}
-              className="aspect-[2/3] rounded-lg overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
-              onClick={() => navigateToMovie(movie.id)}
+              className="aspect-[2/3] rounded-box overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
+              onClick={() => navigateToMovie(movie.id)} // Navigate on click
             >
+              {/* Movie Poster */}
               <img
                 src={movie.posterUrl}
                 alt={movie.title}
                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                 onError={(e) => handleImageError(e)}
               />
+              {/* Gradient Overlays */}
+              <div className="absolute inset-0 bg-gradient-to-t from-neutral via-transparent to-transparent " />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
 
+              {/* Rating Badge */}
               {movie.rating !== undefined && (
                 <div className="absolute top-2 right-2">
                   <div className="badge badge-primary">
@@ -593,9 +688,12 @@ const MovieCarousel = () => {
                 </div>
               )}
 
+              {/* Hover Overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
 
+              {/* Movie Info Overlay */}
               <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+                {/* Genre Names */}
                 {movie.genreNames && movie.genreNames.length > 0 && (
                   <div className="mb-1.5">
                     <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
@@ -603,9 +701,11 @@ const MovieCarousel = () => {
                     </span>
                   </div>
                 )}
-                <div className="px-3 py-1 rounded mx-auto inline-block">
-                  <h3 className="text-sm font-medium leading-tight">
-                    {movie.title} ({movie.year})
+                {/* Movie Title and Year (text-xs) */}
+                <div className=" rounded mx-auto inline-block">
+                  {/* Set text size to text-xs for random movie title */}
+                  <h3 className="text-xs font-medium leading-tight">
+                    {movie.title}
                   </h3>
                 </div>
               </div>
@@ -614,9 +714,14 @@ const MovieCarousel = () => {
         </div>
       </section>
 
+      {/* DIARY Section */}
       <section className="bg-base-200 rounded-lg p-8 text-center">
-        <h2 className="text-2xl font-bold mb-4">DIARY</h2>
-        <p className="mb-6 max-w-2xl mx-auto">
+        {/* Responsive H2 */}
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-4">
+          DIARY
+        </h2>
+        {/* Responsive Paragraph */}
+        <p className="mb-8 max-w-2xl mx-auto text-sm sm:text-base">
           Discover stories on DIARY, a self-publishing platform for all movie
           enthusiast.
         </p>
