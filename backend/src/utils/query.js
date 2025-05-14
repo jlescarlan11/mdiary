@@ -398,7 +398,7 @@ module.exports = {
         };
 
         // Cache the dashboard data for 1 hour (3600 seconds)
-        await cache.set(cacheKey, result, 3600);
+        await cache.set(cacheKey, result, 86400);
 
         return result;
       } catch (err) {
