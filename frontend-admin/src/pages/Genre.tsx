@@ -293,7 +293,7 @@ const GenrePage = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6 mb-12">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6 mb-12">
             {genreGroups.map((group) => (
               <div
                 key={group.genreName}
@@ -396,13 +396,12 @@ const GenrePage = () => {
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
 
-                  <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
-                    <h3 className="font-medium text-sm sm:text-base line-clamp-2">
-                      {movie.title}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-white/80">
-                      {movie.year}
-                    </p>
+                  <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+                    <div className="px-3 py-1 rounded mx-auto inline-block">
+                      <h3 className="text-sm font-medium leading-tight">
+                        {movie.title} ({movie.year})
+                      </h3>
+                    </div>
                   </div>
                 </div>
               ))}

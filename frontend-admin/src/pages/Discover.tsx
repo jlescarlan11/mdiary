@@ -12,6 +12,10 @@ interface Movie {
       name: string;
     };
   }[];
+  _count?: {
+    DiaryEntry?: number;
+  };
+  rating?: number;
   genreNames?: string[];
 }
 
@@ -21,30 +25,14 @@ interface ApiResponse {
   newestPerGenre: Movie[];
 }
 
-// Define sorting options
-type SortField = "title" | "year";
-type SortDirection = "asc" | "desc";
-
-interface SortOption {
-  field: SortField;
-  direction: SortDirection;
-  label: string;
-}
-
-const sortOptions: SortOption[] = [
-  { field: "year", direction: "desc", label: "Newest First" },
-  { field: "year", direction: "asc", label: "Oldest First" },
-  { field: "title", direction: "asc", label: "Title (A-Z)" },
-  { field: "title", direction: "desc", label: "Title (Z-A)" },
-];
-
 const DiscoverPage = () => {
   const [allMovies, setAllMovies] = useState<Movie[]>([]);
   const [displayMovies, setDisplayMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentSort, setCurrentSort] = useState<SortOption>(sortOptions[0]);
+  const [sortOption, setSortOption] = useState<string>("year-desc");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const moviesPerPage = 20;
   const navigate = useNavigate();
 
@@ -71,27 +59,33 @@ const DiscoverPage = () => {
             uniqueMoviesMap.set(movie.id, {
               ...movie,
               genreNames: movie.genres?.map((g) => g.genre.name) || [],
+              rating: movie._count?.DiaryEntry
+                ? Math.min(10, Math.max(1, movie._count.DiaryEntry / 2))
+                : undefined,
             });
           }
         });
 
         // Get all movies as an array with consistent ordering by ID
         // This ensures the same movies appear every time until cache refreshes
-        const allUniqueMovies = Array.from(uniqueMoviesMap.values())
-          .sort((a, b) => a.id.localeCompare(b.id));
-        
+        const allUniqueMovies = Array.from(uniqueMoviesMap.values()).sort(
+          (a, b) => a.id.localeCompare(b.id)
+        );
+
         // Use a deterministic "shuffle" based on movie IDs
         // This creates a pseudo-random selection that remains the same between refreshes
         const pseudoRandomMovies = allUniqueMovies
-          .map(movie => ({
+          .map((movie) => ({
             movie,
             // Create a deterministic but seemingly random sort value using the ID
-            sortValue: parseInt(movie.id.replace(/[^0-9]/g, '').slice(0, 8) || '0', 10) % 10000
+            sortValue:
+              parseInt(movie.id.replace(/[^0-9]/g, "").slice(0, 8) || "0", 10) %
+              10000,
           }))
           .sort((a, b) => a.sortValue - b.sortValue)
-          .map(item => item.movie)
+          .map((item) => item.movie)
           .slice(0, 100);
-        
+
         setAllMovies(pseudoRandomMovies);
         setLoading(false);
       } catch (err) {
@@ -107,36 +101,56 @@ const DiscoverPage = () => {
   // Apply sorting whenever sort option or all movies change
   useEffect(() => {
     if (allMovies.length > 0) {
-      const sortedMovies = [...allMovies].sort((a, b) => {
-        if (currentSort.field === "title") {
-          // String comparison for titles
-          const comparison = a.title.localeCompare(b.title);
-          return currentSort.direction === "asc" ? comparison : -comparison;
-        } else {
-          // Numeric comparison for years
-          const comparison = a.year - b.year;
-          return currentSort.direction === "asc" ? comparison : -comparison;
-        }
-      });
-      setDisplayMovies(sortedMovies);
-      // Reset to first page when sort changes
+      let filteredMovies = [...allMovies];
+
+      // Apply search filter if any
+      if (searchQuery.trim() !== "") {
+        const query = searchQuery.toLowerCase();
+        filteredMovies = filteredMovies.filter(
+          (movie) =>
+            movie.title.toLowerCase().includes(query) ||
+            movie.year.toString().includes(query)
+        );
+      }
+
+      // Apply sorting
+      switch (sortOption) {
+        case "year-desc":
+          filteredMovies.sort((a, b) => b.year - a.year);
+          break;
+        case "year-asc":
+          filteredMovies.sort((a, b) => a.year - b.year);
+          break;
+        case "title-asc":
+          filteredMovies.sort((a, b) => a.title.localeCompare(b.title));
+          break;
+        case "title-desc":
+          filteredMovies.sort((a, b) => b.title.localeCompare(a.title));
+          break;
+        case "rating-desc":
+          filteredMovies.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+          break;
+        default:
+          break;
+      }
+
+      setDisplayMovies(filteredMovies);
+      // Reset to first page when sort changes or search changes
       setCurrentPage(1);
     }
-  }, [allMovies, currentSort]);
+  }, [allMovies, sortOption, searchQuery]);
 
   // Get current page of movies
   const indexOfLastMovie = currentPage * moviesPerPage;
   const indexOfFirstMovie = indexOfLastMovie - moviesPerPage;
-  const currentMovies = displayMovies.slice(indexOfFirstMovie, indexOfLastMovie);
+  const currentMovies = displayMovies.slice(
+    indexOfFirstMovie,
+    indexOfLastMovie
+  );
   const totalPages = Math.ceil(displayMovies.length / moviesPerPage);
 
   // Change page
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
-
-  // Handle sort change
-  const handleSortChange = (option: SortOption) => {
-    setCurrentSort(option);
-  };
 
   if (loading) {
     return (
@@ -189,33 +203,52 @@ const DiscoverPage = () => {
         <h1 className="text-3xl font-bold">Discover Movies</h1>
       </div>
 
-      <div className="flex flex-wrap justify-between items-center mb-8">
-        <p className="text-lg mb-4 md:mb-0">
-          Explore our selection of {displayMovies.length} movies from our collection.
-        </p>
-        
-        <div className="flex flex-wrap gap-2">
-          <span className="self-center mr-2 font-medium">Sort by:</span>
-          <div className="join">
-            {sortOptions.map((option) => (
-              <button
-                key={`${option.field}-${option.direction}`}
-                className={`join-item btn ${
-                  currentSort.field === option.field && 
-                  currentSort.direction === option.direction
-                    ? "btn-active"
-                    : ""
-                }`}
-                onClick={() => handleSortChange(option)}
-              >
-                {option.label}
-              </button>
-            ))}
+      <div className="w-full mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start mb-6">
+          <p className="text-lg mb-4 md:mb-0">
+            Explore our selection of {allMovies.length} movies from our
+            collection.
+          </p>
+
+          {/* Controls and filtering - matching Genre page style */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="form-control w-full sm:w-auto">
+              <input
+                type="text"
+                placeholder="Search movies..."
+                className="input input-sm input-bordered w-full sm:max-w-xs"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <select
+              className="select select-sm select-bordered w-full sm:w-auto"
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+            >
+              <option value="year-desc">Newest first</option>
+              <option value="year-asc">Oldest first</option>
+              <option value="title-asc">Title (A-Z)</option>
+              <option value="title-desc">Title (Z-A)</option>
+              <option value="rating-desc">Highest rated</option>
+            </select>
           </div>
+        </div>
+
+        {/* Results count and stats */}
+        <div className="flex justify-between items-center">
+          <p className="text-base-content/70">
+            {displayMovies.length === 0
+              ? "No movies found"
+              : `Showing ${displayMovies.length} movie${
+                  displayMovies.length !== 1 ? "s" : ""
+                }`}
+            {searchQuery && ` for "${searchQuery}"`}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 mb-10">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-10">
         {currentMovies.map((movie) => (
           <div
             key={movie.id}
@@ -234,6 +267,14 @@ const DiscoverPage = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100" />
             </div>
+
+            {movie.rating !== undefined && (
+              <div className="absolute top-2 right-2">
+                <div className="badge badge-primary">
+                  {movie.rating.toFixed(1)}
+                </div>
+              </div>
+            )}
 
             <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
               {movie.genreNames && movie.genreNames.length > 0 && (
@@ -264,7 +305,7 @@ const DiscoverPage = () => {
             >
               «
             </button>
-            
+
             {/* Only show a subset of pages if there are many */}
             {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
               // For large page counts, show pages around current page
@@ -278,7 +319,7 @@ const DiscoverPage = () => {
                   pageNum = currentPage - 2 + i;
                 }
               }
-              
+
               return (
                 <button
                   key={pageNum}
@@ -291,10 +332,14 @@ const DiscoverPage = () => {
                 </button>
               );
             })}
-            
+
             <button
               className="join-item btn"
-              onClick={() => paginate(currentPage < totalPages ? currentPage + 1 : totalPages)}
+              onClick={() =>
+                paginate(
+                  currentPage < totalPages ? currentPage + 1 : totalPages
+                )
+              }
               disabled={currentPage === totalPages}
             >
               »
