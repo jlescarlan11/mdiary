@@ -9,7 +9,7 @@ const Navbar: React.FC<NavbarProps> = () => {
     <div className="bg-base-100 shadow-sm">
       <div className="navbar container max-w-7xl mx-auto">
         <div className="flex-1">
-          <a className="btn btn-ghost text-xl">SineMemoria</a>
+          <a className="btn btn-ghost text-xl">MovieDiary</a>
         </div>
         <div className="flex-none flex">
           <ul className="menu menu-horizontal px-1 flex items-center gap-4">
