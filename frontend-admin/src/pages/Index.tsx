@@ -35,12 +35,19 @@ const MovieCarousel = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  // Removed unused transitionDirection state
   const [visibleItemsCount, setVisibleItemsCount] = useState(5);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [mouseDown, setMouseDown] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const carouselRef = useRef<HTMLDivElement>(null);
+  const dragStartX = useRef(0);
+  const lastDragX = useRef(0);
+  const velocityX = useRef(0);
+  const animationFrameId = useRef<number | undefined>(undefined);
+  const [skipTransition, setSkipTransition] = useState(false);
 
   // Fetch all movie data from API
   useEffect(() => {
@@ -91,45 +98,85 @@ const MovieCarousel = () => {
     return () => clearInterval(interval);
   }, [data?.popularMovies, currentIndex, mouseDown, swipeOffset]);
 
-  // Touch event handlers
+  // Enhanced touch event handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.targetTouches[0].clientX);
-    setTouchEnd(e.targetTouches[0].clientX);
+    if (transitioning) return;
+    setIsDragging(true);
+    const touch = e.targetTouches[0];
+    setTouchStart(touch.clientX);
+    setTouchEnd(touch.clientX);
+    dragStartX.current = touch.clientX;
+    lastDragX.current = touch.clientX;
+    velocityX.current = 0;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-    setSwipeOffset(e.targetTouches[0].clientX - touchStart);
+    if (!isDragging) return;
+    const touch = e.targetTouches[0];
+    setTouchEnd(touch.clientX);
+
+    // Calculate velocity
+    velocityX.current = touch.clientX - lastDragX.current;
+    lastDragX.current = touch.clientX;
+
+    // Update swipe offset with smooth damping
+    const delta = touch.clientX - dragStartX.current;
+    const dampedDelta = delta * 0.8; // Add resistance to the swipe
+    setSwipeOffset(dampedDelta);
   };
 
   const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+    if (!isDragging) return;
+    setIsDragging(false);
 
+    const swipeDistance = touchEnd - touchStart;
+    const swipeVelocity = velocityX.current;
     const threshold = 50;
-    const popularMovies = data?.popularMovies;
+    const velocityThreshold = 1;
 
-    if (touchStart - touchEnd > threshold && popularMovies) {
-      goToNext();
+    if (
+      Math.abs(swipeDistance) > threshold ||
+      Math.abs(swipeVelocity) > velocityThreshold
+    ) {
+      if (swipeDistance < 0 || swipeVelocity < -velocityThreshold) {
+        // Direct transition to next without resetting first
+        // Removed setting transitionDirection as it's unused
+        animateToNextSlide("next");
+      } else if (swipeDistance > 0 || swipeVelocity > velocityThreshold) {
+        // Direct transition to prev without resetting first
+        // Removed setting transitionDirection as it's unused
+        animateToNextSlide("prev");
+      }
+    } else {
+      // Only reset if we're not transitioning to a new slide
+      animateSwipeReset();
     }
-
-    if (touchEnd - touchStart > threshold && popularMovies) {
-      goToPrev();
-    }
-
-    setSwipeOffset(0);
   };
 
-  // Mouse event handlers
+  // Enhanced mouse event handlers
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (transitioning) return;
     setMouseDown(true);
+    setIsDragging(true);
     setTouchStart(e.clientX);
     setTouchEnd(e.clientX);
+    dragStartX.current = e.clientX;
+    lastDragX.current = e.clientX;
+    velocityX.current = 0;
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!mouseDown) return;
+    if (!isDragging) return;
     setTouchEnd(e.clientX);
-    setSwipeOffset(e.clientX - touchStart);
+
+    // Calculate velocity
+    velocityX.current = e.clientX - lastDragX.current;
+    lastDragX.current = e.clientX;
+
+    // Update swipe offset with smooth damping
+    const delta = e.clientX - dragStartX.current;
+    const dampedDelta = delta * 0.8; // Add resistance to the swipe
+    setSwipeOffset(dampedDelta);
   };
 
   const handleMouseUp = () => {
@@ -139,26 +186,97 @@ const MovieCarousel = () => {
     }
   };
 
-  // Navigation functions
-  const goToNext = () => {
+  // Smooth animation for transitioning directly to next/prev slide
+  const animateToNextSlide = (direction: "next" | "prev") => {
     if (!data?.popularMovies) return;
     setTransitioning(true);
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % data.popularMovies.length);
-      setTransitioning(false);
-    }, 300);
+
+    const totalMovies = data.popularMovies.length;
+    const startOffset = swipeOffset;
+    const startTime = performance.now();
+    const duration = 350; // Slightly adjusted for a balanced feel
+
+    const cardWidth =
+      carouselRef.current?.querySelector('div[style*="height: 24rem"]')
+        ?.clientWidth || 200;
+    const slideDistance = cardWidth * 1.5;
+
+    const targetOffset = direction === "next" ? -slideDistance : slideDistance;
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1); // Changed let to const
+
+      // Refined ease-out cubic for a natural deceleration
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+
+      const currentOffset =
+        startOffset + (targetOffset - startOffset) * easeOutCubic;
+      setSwipeOffset(currentOffset);
+
+      if (progress < 1) {
+        animationFrameId.current = requestAnimationFrame(animate);
+      } else {
+        setSkipTransition(true);
+        setTimeout(() => {
+          if (direction === "next") {
+            setCurrentIndex((prev) => (prev + 1) % totalMovies);
+          } else {
+            setCurrentIndex((prev) =>
+              prev === 0 ? totalMovies - 1 : prev - 1
+            );
+          }
+          setSwipeOffset(0);
+          setTimeout(() => {
+            setSkipTransition(false);
+            setTransitioning(false);
+          }, 30); // Short delay to ensure styles apply
+        }, 0);
+      }
+    };
+
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+    }
+    animationFrameId.current = requestAnimationFrame(animate);
   };
 
-  const goToPrev = () => {
-    if (!data?.popularMovies) return;
-    setTransitioning(true);
-    setTimeout(() => {
-      setCurrentIndex((prev) =>
-        prev === 0 ? data.popularMovies.length - 1 : prev - 1
-      );
-      setTransitioning(false);
-    }, 300);
+  // Smooth animation for resetting swipe offset
+  const animateSwipeReset = () => {
+    const startOffset = swipeOffset;
+    const startTime = performance.now();
+    const duration = 300;
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1); // Changed let to const
+
+      // Easing function for smooth animation
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+
+      setSwipeOffset(startOffset * (1 - easeOutCubic));
+
+      if (progress < 1) {
+        animationFrameId.current = requestAnimationFrame(animate);
+      }
+    };
+
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+    }
+    animationFrameId.current = requestAnimationFrame(animate);
   };
+
+  // Cleanup animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+    };
+  }, []);
+
+  // Enhanced navigation functions using the animation system
 
   // Helper functions
   const transformMovies = (movies: Movie[]) => {
@@ -178,7 +296,8 @@ const MovieCarousel = () => {
     const visible = [];
     const offset = Math.floor(visibleItemsCount / 2);
 
-    for (let i = 0; i < visibleItemsCount; i++) {
+    // Focus on showing just enough movies for a smooth transition
+    for (let i = -1; i < visibleItemsCount + 1; i++) {
       const index = (currentIndex + i - offset + totalMovies) % totalMovies;
       visible.push(transformed[index]);
     }
@@ -240,10 +359,15 @@ const MovieCarousel = () => {
         </div>
         <div
           ref={carouselRef}
-          className={`flex justify-center items-end -mx-2 sm:-mx-4 ${
-            transitioning ? "opacity-50" : "opacity-100"
-          } transition-opacity duration-1000 ease-in-out`}
-          style={{ transform: `translateX(${swipeOffset}px)` }}
+          className="flex justify-center items-end -mx-2 sm:-mx-4 select-none"
+          style={{
+            transform: `translateX(${swipeOffset}px)`,
+            cursor: isDragging ? "grabbing" : "grab",
+            transition:
+              skipTransition || transitioning
+                ? "none"
+                : "transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)",
+          }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -253,28 +377,29 @@ const MovieCarousel = () => {
           onMouseLeave={handleMouseUp}
         >
           {visibleMovies.map((movie, index) => {
-            const position = index - Math.floor(visibleItemsCount / 2);
+            const position = index - (Math.floor(visibleItemsCount / 2) + 1);
             let scaleClass = "";
             let opacityClass = "";
             let zIndexClass = "";
             let widthClass = "";
             let marginClass = "";
 
+            // Adjusted scaling for a more perceptible difference
             if (visibleItemsCount === 5) {
               if (position === 0) {
-                scaleClass = "scale-110";
+                scaleClass = "scale-110"; // Center card
                 opacityClass = "opacity-100";
                 zIndexClass = "z-20";
                 widthClass = "w-4/12";
                 marginClass = "mx-2 sm:mx-4";
               } else if (position === -1 || position === 1) {
-                scaleClass = "scale-100";
-                opacityClass = "opacity-90";
+                scaleClass = "scale-100"; // Immediate neighbors
+                opacityClass = "opacity-85";
                 zIndexClass = "z-10";
                 widthClass = "w-3/12";
                 marginClass = "mx-1 sm:mx-2";
               } else {
-                scaleClass = "scale-90";
+                scaleClass = "scale-90"; // Outer cards
                 opacityClass = "opacity-70";
                 zIndexClass = "z-0";
                 widthClass = "w-2/12";
@@ -282,13 +407,13 @@ const MovieCarousel = () => {
               }
             } else if (visibleItemsCount === 3) {
               if (position === 0) {
-                scaleClass = "scale-110";
+                scaleClass = "scale-110"; // Center card
                 opacityClass = "opacity-100";
                 zIndexClass = "z-20";
                 widthClass = "w-7/12";
                 marginClass = "mx-2";
               } else {
-                scaleClass = "scale-90";
+                scaleClass = "scale-95"; // Side cards slightly smaller for 3-item view
                 opacityClass = "opacity-80";
                 zIndexClass = "z-10";
                 widthClass = "w-5/12";
@@ -299,48 +424,37 @@ const MovieCarousel = () => {
             return (
               <div
                 key={`${movie.id}-${index}`}
-                className={`flex-shrink-0 px-1 sm:px-2 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${scaleClass} ${opacityClass} ${zIndexClass} ${widthClass} ${marginClass}`}
-                style={{ height: "24rem" }}
+                className={`flex-shrink-0 px-1 sm:px-2 ${scaleClass} ${opacityClass} ${zIndexClass} ${widthClass} ${marginClass} will-change-transform`}
+                style={{
+                  height: "24rem",
+                  transition: "all 0.45s cubic-bezier(0.25, 0.1, 0.25, 1)",
+                }}
               >
-                <div className="card bg-base-100 shadow-xl h-full group relative rounded-box">
-                  <figure className="relative h-full rounded-box">
+                <div className="card bg-base-100 shadow-xl h-full group relative rounded-box overflow-hidden">
+                  <figure className="relative h-full rounded-box overflow-hidden">
                     <img
                       src={movie.posterUrl}
                       alt={`Poster for ${movie.title}`}
-                      className="w-full h-full object-cover rounded-box transition-opacity duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                      className="w-full h-full object-cover rounded-box transition-transform duration-500 ease-out group-hover:scale-105"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src =
                           "https://placehold.co/800x400?text=No+Poster";
                       }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-100 transition-opacity duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] rounded-box" />
-                    <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-50 transition-opacity duration-300 rounded-box"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100 rounded-box" />
                   </figure>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                    <div className="transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]">
-                      <h2 className="card-title text-lg sm:text-xl font-bold line-clamp-1">
+                  <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+                    {movie.genreNames && movie.genreNames.length > 0 && (
+                      <div className="mb-1.5">
+                        <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
+                          {movie.genreNames.slice(0, 2).join(" ")}
+                        </span>
+                      </div>
+                    )}
+                    <div className="px-3 py-1 rounded mx-auto inline-block">
+                      <h2 className="text-sm font-medium leading-tight">
                         {movie.title}
                       </h2>
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-sm sm:text-base">{movie.year}</p>
-                        {movie.rating !== undefined && (
-                          <div className="badge badge-primary">
-                            {movie.rating.toFixed(1)}
-                          </div>
-                        )}
-                      </div>
-                      {movie.genreNames && movie.genreNames.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {movie.genreNames.map((g) => (
-                            <span
-                              key={g}
-                              className="badge badge-outline badge-sm"
-                            >
-                              {g}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -349,21 +463,22 @@ const MovieCarousel = () => {
           })}
         </div>
 
+        {/* Navigation Dots - Transitions refined */}
         {data.popularMovies.length > 1 && (
-          <div className="flex justify-center mt-6 space-x-2">
+          <div className="flex justify-center mt-8 space-x-2.5">
             {data.popularMovies.map((_, index) => (
               <button
                 key={index}
                 onClick={() => {
                   setTransitioning(true);
-                  setTimeout(() => {
-                    setCurrentIndex(index);
-                    setTransitioning(false);
-                  }, 300);
+                  setCurrentIndex(index);
+                  setTimeout(() => setTransitioning(false), 50);
                 }}
-                className={`w-3 h-3 rounded-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                  currentIndex === index ? "bg-primary w-6" : "bg-gray-300"
-                } ${transitioning ? "opacity-70" : "opacity-100"}`}
+                className={`w-2.5 h-2.5 rounded-full transition-all duration-350 ease-out hover:opacity-75 ${
+                  currentIndex === index
+                    ? "bg-primary scale-125"
+                    : "bg-gray-300 scale-100"
+                } ${transitioning ? "opacity-50" : "opacity-100"}`}
                 aria-label={`Go to movie ${index + 1}`}
                 disabled={transitioning}
               />
@@ -413,39 +528,37 @@ const MovieCarousel = () => {
 
 const MovieCard = ({ movie }: MovieCardProps) => {
   return (
-    <div className="card bg-base-100 shadow-xl h-full group relative rounded-box">
-      <figure className="relative h-64 rounded-box">
-        <img
-          src={movie.posterUrl}
-          alt={`Poster for ${movie.title}`}
-          className="w-full h-full object-cover rounded-box"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              "https://placehold.co/800x400?text=No+Poster";
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-70 rounded-box" />
-        <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-50 transition-opacity duration-300 rounded-box"></div>
-      </figure>
-      <div className="card-body p-4">
-        <h3 className="card-title text-sm line-clamp-1">{movie.title}</h3>
-        <div className="flex justify-between items-center">
-          <p className="text-xs">{movie.year}</p>
-          {movie.rating !== undefined && (
-            <div className="badge badge-primary badge-sm">
-              {movie.rating.toFixed(1)}
+    <div
+      className="card bg-base-100 shadow-lg h-full group relative rounded-box overflow-hidden will-change-transform"
+      style={{
+        transition: "all 0.45s cubic-bezier(0.25, 0.1, 0.25, 1)",
+      }}
+    >
+      <div className="w-full h-full transform transition-transform duration-450 ease-out group-hover:scale-[1.03]">
+        <figure className="relative h-64 rounded-box overflow-hidden">
+          <img
+            src={movie.posterUrl}
+            alt={`Poster for ${movie.title}`}
+            className="w-full h-full object-cover rounded-box transition-transform duration-500 ease-out group-hover:scale-105"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src =
+                "https://placehold.co/800x400?text=No+Poster";
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100 rounded-box" />
+        </figure>
+        <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+          {movie.genreNames && movie.genreNames.length > 0 && (
+            <div className="mb-1.5 transition-opacity duration-300 ease-out opacity-90 group-hover:opacity-100">
+              <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
+                {movie.genreNames.slice(0, 2).join(" ")}
+              </span>
             </div>
           )}
-        </div>
-        {movie.genreNames && movie.genreNames.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {movie.genreNames.map((g) => (
-              <span key={g} className="badge badge-outline badge-sm">
-                {g}
-              </span>
-            ))}
+          <div className="px-3 py-1 rounded mx-auto inline-block transform transition-all duration-300 ease-out group-hover:translate-y-[-2px]">
+            <h3 className="text-sm font-medium leading-tight">{movie.title}</h3>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
