@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 interface Movie {
   id: string;
@@ -15,12 +16,7 @@ interface Movie {
     DiaryEntry?: number;
   };
   rating?: number;
-}
-
-interface MovieCardProps {
-  movie: Movie & {
-    genreNames?: string[];
-  };
+  genreNames?: string[];
 }
 
 interface ApiResponse {
@@ -29,13 +25,17 @@ interface ApiResponse {
   newestPerGenre: Movie[];
 }
 
+interface GenreMovie {
+  genreName: string;
+  movie: Movie;
+}
+
 const MovieCarousel = () => {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
-  // Removed unused transitionDirection state
   const [visibleItemsCount, setVisibleItemsCount] = useState(5);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
@@ -48,15 +48,24 @@ const MovieCarousel = () => {
   const velocityX = useRef(0);
   const animationFrameId = useRef<number | undefined>(undefined);
   const [skipTransition, setSkipTransition] = useState(false);
+  const [genreMovies, setGenreMovies] = useState<GenreMovie[]>([]);
+  const [limitedRandomMovies, setLimitedRandomMovies] = useState<Movie[]>([]);
+  const navigate = useNavigate();
 
-  // Fetch all movie data from API
   useEffect(() => {
     const fetchMovies = async () => {
       try {
         const response = await axios.get<ApiResponse>(
           import.meta.env.VITE_GET_DASHBOARD
         );
-        setData(response.data);
+
+        // Limit popular movies to 10 for the carousel
+        const limitedData = {
+          ...response.data,
+          popularMovies: response.data.popularMovies.slice(0, 10),
+        };
+
+        setData(limitedData);
       } catch (err) {
         console.error("Failed to fetch movies:", err);
         setError("Failed to load movies. Please try again later.");
@@ -72,7 +81,67 @@ const MovieCarousel = () => {
     return () => window.removeEventListener("resize", updateVisibleItemsCount);
   }, []);
 
-  // Update visible items count based on screen size
+  useEffect(() => {
+    if (data?.newestPerGenre) {
+      const usedMovieIds = new Set<string>();
+      const genreToMoviesMap = new Map<string, Movie[]>();
+
+      data.newestPerGenre.forEach((movie) => {
+        if (movie.genres && movie.genres.length > 0) {
+          movie.genres.forEach((genreObj) => {
+            const genreName = genreObj.genre.name;
+            if (!genreToMoviesMap.has(genreName)) {
+              genreToMoviesMap.set(genreName, []);
+            }
+            genreToMoviesMap.get(genreName)?.push(movie);
+          });
+        }
+      });
+
+      const sortedGenres = Array.from(genreToMoviesMap.keys()).sort(
+        (a, b) =>
+          (genreToMoviesMap.get(b)?.length || 0) -
+          (genreToMoviesMap.get(a)?.length || 0)
+      );
+
+      const topGenres = sortedGenres.slice(0, 10);
+
+      const genreMoviesArray: GenreMovie[] = [];
+
+      topGenres.forEach((genreName) => {
+        const moviesForGenre = genreToMoviesMap.get(genreName) || [];
+
+        const unusedMovie = moviesForGenre.find(
+          (movie) => !usedMovieIds.has(movie.id)
+        );
+
+        if (unusedMovie) {
+          usedMovieIds.add(unusedMovie.id);
+          genreMoviesArray.push({ genreName, movie: unusedMovie });
+        }
+      });
+
+      setGenreMovies(genreMoviesArray);
+    }
+
+    if (data?.randomMovies) {
+      // Create a deterministic random selection using movie IDs
+      const pseudoRandomMovies = [...data.randomMovies]
+        .map((movie) => ({
+          movie,
+          // Create a deterministic but seemingly random sort value using the ID
+          sortValue:
+            parseInt(movie.id.replace(/[^0-9]/g, "").slice(0, 8) || "0", 10) %
+            10000,
+        }))
+        .sort((a, b) => a.sortValue - b.sortValue)
+        .map((item) => item.movie)
+        .slice(0, 10);
+
+      setLimitedRandomMovies(pseudoRandomMovies);
+    }
+  }, [data]);
+
   const updateVisibleItemsCount = () => {
     if (window.innerWidth < 768) {
       setVisibleItemsCount(3);
@@ -81,13 +150,12 @@ const MovieCarousel = () => {
     }
   };
 
-  // Auto-slide functionality
   useEffect(() => {
     const popularMovies = data?.popularMovies;
     if (!popularMovies || popularMovies.length <= 1) return;
 
     const interval = setInterval(() => {
-      if (mouseDown || swipeOffset !== 0) return; // Don't auto-slide while interacting
+      if (mouseDown || swipeOffset !== 0) return;
       setTransitioning(true);
       setTimeout(() => {
         setCurrentIndex((prev) => (prev + 1) % popularMovies.length);
@@ -98,7 +166,6 @@ const MovieCarousel = () => {
     return () => clearInterval(interval);
   }, [data?.popularMovies, currentIndex, mouseDown, swipeOffset]);
 
-  // Enhanced touch event handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     if (transitioning) return;
     setIsDragging(true);
@@ -115,13 +182,11 @@ const MovieCarousel = () => {
     const touch = e.targetTouches[0];
     setTouchEnd(touch.clientX);
 
-    // Calculate velocity
     velocityX.current = touch.clientX - lastDragX.current;
     lastDragX.current = touch.clientX;
 
-    // Update swipe offset with smooth damping
     const delta = touch.clientX - dragStartX.current;
-    const dampedDelta = delta * 0.8; // Add resistance to the swipe
+    const dampedDelta = delta * 0.8;
     setSwipeOffset(dampedDelta);
   };
 
@@ -139,21 +204,15 @@ const MovieCarousel = () => {
       Math.abs(swipeVelocity) > velocityThreshold
     ) {
       if (swipeDistance < 0 || swipeVelocity < -velocityThreshold) {
-        // Direct transition to next without resetting first
-        // Removed setting transitionDirection as it's unused
         animateToNextSlide("next");
       } else if (swipeDistance > 0 || swipeVelocity > velocityThreshold) {
-        // Direct transition to prev without resetting first
-        // Removed setting transitionDirection as it's unused
         animateToNextSlide("prev");
       }
     } else {
-      // Only reset if we're not transitioning to a new slide
       animateSwipeReset();
     }
   };
 
-  // Enhanced mouse event handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (transitioning) return;
     setMouseDown(true);
@@ -169,13 +228,11 @@ const MovieCarousel = () => {
     if (!isDragging) return;
     setTouchEnd(e.clientX);
 
-    // Calculate velocity
     velocityX.current = e.clientX - lastDragX.current;
     lastDragX.current = e.clientX;
 
-    // Update swipe offset with smooth damping
     const delta = e.clientX - dragStartX.current;
-    const dampedDelta = delta * 0.8; // Add resistance to the swipe
+    const dampedDelta = delta * 0.8;
     setSwipeOffset(dampedDelta);
   };
 
@@ -186,7 +243,6 @@ const MovieCarousel = () => {
     }
   };
 
-  // Smooth animation for transitioning directly to next/prev slide
   const animateToNextSlide = (direction: "next" | "prev") => {
     if (!data?.popularMovies) return;
     setTransitioning(true);
@@ -194,7 +250,7 @@ const MovieCarousel = () => {
     const totalMovies = data.popularMovies.length;
     const startOffset = swipeOffset;
     const startTime = performance.now();
-    const duration = 350; // Slightly adjusted for a balanced feel
+    const duration = 350;
 
     const cardWidth =
       carouselRef.current?.querySelector('div[style*="height: 24rem"]')
@@ -205,9 +261,8 @@ const MovieCarousel = () => {
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1); // Changed let to const
+      const progress = Math.min(elapsed / duration, 1);
 
-      // Refined ease-out cubic for a natural deceleration
       const easeOutCubic = 1 - Math.pow(1 - progress, 3);
 
       const currentOffset =
@@ -230,7 +285,7 @@ const MovieCarousel = () => {
           setTimeout(() => {
             setSkipTransition(false);
             setTransitioning(false);
-          }, 30); // Short delay to ensure styles apply
+          }, 30);
         }, 0);
       }
     };
@@ -241,7 +296,6 @@ const MovieCarousel = () => {
     animationFrameId.current = requestAnimationFrame(animate);
   };
 
-  // Smooth animation for resetting swipe offset
   const animateSwipeReset = () => {
     const startOffset = swipeOffset;
     const startTime = performance.now();
@@ -249,9 +303,8 @@ const MovieCarousel = () => {
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1); // Changed let to const
+      const progress = Math.min(elapsed / duration, 1);
 
-      // Easing function for smooth animation
       const easeOutCubic = 1 - Math.pow(1 - progress, 3);
 
       setSwipeOffset(startOffset * (1 - easeOutCubic));
@@ -267,7 +320,6 @@ const MovieCarousel = () => {
     animationFrameId.current = requestAnimationFrame(animate);
   };
 
-  // Cleanup animation frame on unmount
   useEffect(() => {
     return () => {
       if (animationFrameId.current) {
@@ -276,9 +328,6 @@ const MovieCarousel = () => {
     };
   }, []);
 
-  // Enhanced navigation functions using the animation system
-
-  // Helper functions
   const transformMovies = (movies: Movie[]) => {
     return movies.map((movie) => ({
       ...movie,
@@ -296,7 +345,6 @@ const MovieCarousel = () => {
     const visible = [];
     const offset = Math.floor(visibleItemsCount / 2);
 
-    // Focus on showing just enough movies for a smooth transition
     for (let i = -1; i < visibleItemsCount + 1; i++) {
       const index = (currentIndex + i - offset + totalMovies) % totalMovies;
       visible.push(transformed[index]);
@@ -304,7 +352,14 @@ const MovieCarousel = () => {
     return visible;
   };
 
-  // Render states
+  const handleViewAllGenres = () => {
+    navigate("/genres");
+  };
+
+  const handleDiscoverMore = () => {
+    navigate("/discover");
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -344,13 +399,10 @@ const MovieCarousel = () => {
   }
 
   const visibleMovies = getVisibleMovies();
-  const randomMovies = transformMovies(data.randomMovies);
-  const newestPerGenre = transformMovies(data.newestPerGenre);
 
   return (
-    <div className="container max-w-7xl mx-auto px-4 space-y-12">
-      {/* Header Carousel - Popular Movies */}
-      <section className="relative overflow-hidden py-4 sm:py-8 flex flex-col space-y-8 sm:space-y-12 items-center">
+    <div className="container max-w-7xl mx-auto px-4 space-y-16">
+      <section className="relative overflow-hidden py-8 sm:py-12 flex flex-col space-y-10 items-center">
         <div className="text-center">
           <h1 className="text-2xl sm:text-4xl text-center font-bold">
             Welcome to SineMemoria!
@@ -384,22 +436,21 @@ const MovieCarousel = () => {
             let widthClass = "";
             let marginClass = "";
 
-            // Adjusted scaling for a more perceptible difference
             if (visibleItemsCount === 5) {
               if (position === 0) {
-                scaleClass = "scale-110"; // Center card
+                scaleClass = "scale-110";
                 opacityClass = "opacity-100";
                 zIndexClass = "z-20";
                 widthClass = "w-4/12";
                 marginClass = "mx-2 sm:mx-4";
               } else if (position === -1 || position === 1) {
-                scaleClass = "scale-100"; // Immediate neighbors
+                scaleClass = "scale-100";
                 opacityClass = "opacity-85";
                 zIndexClass = "z-10";
                 widthClass = "w-3/12";
                 marginClass = "mx-1 sm:mx-2";
               } else {
-                scaleClass = "scale-90"; // Outer cards
+                scaleClass = "scale-90";
                 opacityClass = "opacity-70";
                 zIndexClass = "z-0";
                 widthClass = "w-2/12";
@@ -407,13 +458,13 @@ const MovieCarousel = () => {
               }
             } else if (visibleItemsCount === 3) {
               if (position === 0) {
-                scaleClass = "scale-110"; // Center card
+                scaleClass = "scale-110";
                 opacityClass = "opacity-100";
                 zIndexClass = "z-20";
                 widthClass = "w-7/12";
                 marginClass = "mx-2";
               } else {
-                scaleClass = "scale-95"; // Side cards slightly smaller for 3-item view
+                scaleClass = "scale-95";
                 opacityClass = "opacity-80";
                 zIndexClass = "z-10";
                 widthClass = "w-5/12";
@@ -452,7 +503,7 @@ const MovieCarousel = () => {
                       </div>
                     )}
                     <div className="px-3 py-1 rounded mx-auto inline-block">
-                      <h2 className="text-sm font-medium leading-tight">
+                      <h2 className="text-xs font-medium leading-tight">
                         {movie.title}
                       </h2>
                     </div>
@@ -463,7 +514,6 @@ const MovieCarousel = () => {
           })}
         </div>
 
-        {/* Navigation Dots - Transitions refined */}
         {data.popularMovies.length > 1 && (
           <div className="flex justify-center mt-8 space-x-2.5">
             {data.popularMovies.map((_, index) => (
@@ -487,79 +537,109 @@ const MovieCarousel = () => {
         )}
       </section>
 
-      {/* Originals by Genre Section */}
-      <section className="space-y-4">
+      <section className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold">New Movies By Genre</h2>
-          <button className="btn btn-ghost">ALL</button>
+          <button className="btn btn-ghost" onClick={handleViewAllGenres}>
+            VIEW ALL
+          </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {newestPerGenre.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+          {genreMovies.map((item) => (
+            <div
+              key={`${item.genreName}-${item.movie.id}`}
+              className="group relative overflow-hidden rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300"
+              onClick={() =>
+                navigate(`/genres/${encodeURIComponent(item.genreName)}`)
+              }
+            >
+              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-neutral-800/90 to-transparent p-3 z-10">
+                <h3 className="text-md font-semibold text-white">
+                  {item.genreName}
+                </h3>
+              </div>
+
+              <div className="h-80 overflow-hidden">
+                <img
+                  src={item.movie.posterUrl}
+                  alt={`${item.movie.title} - ${item.genreName}`}
+                  className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://placehold.co/800x400?text=No+Poster";
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100" />
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+                <div className="px-3 py-1 rounded mx-auto inline-block">
+                  <h3 className="text-sm font-medium leading-tight">
+                    {item.movie.title}
+                  </h3>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </section>
 
-      {/* Random Recommendations Section */}
-      <section className="space-y-4">
-        <h2 className="text-2xl font-bold">You Might Like</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {randomMovies.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))}
+      <section className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">You Might Like</h2>
+          <button className="btn btn-ghost" onClick={handleDiscoverMore}>
+            DISCOVER MORE
+          </button>
         </div>
-        <div className="flex justify-center mt-4">
-          <button className="btn btn-primary">Discover More</button>
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+          {limitedRandomMovies.map((movie) => (
+            <div
+              key={movie.id}
+              className="group relative overflow-hidden rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300"
+              onClick={() => navigate(`/movie/${movie.id}`)}
+            >
+              <div className="h-80 overflow-hidden">
+                <img
+                  src={movie.posterUrl}
+                  alt={movie.title}
+                  className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://placehold.co/800x400?text=No+Poster";
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100" />
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+                {movie.genreNames && movie.genreNames.length > 0 && (
+                  <div className="mb-1.5">
+                    <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
+                      {movie.genreNames.slice(0, 2).join(" ")}
+                    </span>
+                  </div>
+                )}
+                <div className="px-3 py-1 rounded mx-auto inline-block">
+                  <h3 className="text-sm font-medium leading-tight">
+                    {movie.title}
+                  </h3>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* Canvas Section */}
-      <section className="bg-base-200 rounded-lg p-6 text-center">
-        <h2 className="text-2xl font-bold mb-2">CANVAS</h2>
-        <p className="mb-4">
+      <section className="bg-base-200 rounded-lg p-8 text-center">
+        <h2 className="text-2xl font-bold mb-4">CANVAS</h2>
+        <p className="mb-6 max-w-2xl mx-auto">
           Discover stories on CANVAS, a self-publishing platform for indie
           creators
         </p>
-        <button className="btn btn-primary">Go to CANVAS</button>
+        <button className="btn btn-primary" onClick={() => navigate("/canvas")}>
+          GO TO CANVAS
+        </button>
       </section>
-    </div>
-  );
-};
-
-const MovieCard = ({ movie }: MovieCardProps) => {
-  return (
-    <div
-      className="card bg-base-100 shadow-lg h-full group relative rounded-box overflow-hidden will-change-transform"
-      style={{
-        transition: "all 0.45s cubic-bezier(0.25, 0.1, 0.25, 1)",
-      }}
-    >
-      <div className="w-full h-full transform transition-transform duration-450 ease-out group-hover:scale-[1.03]">
-        <figure className="relative h-64 rounded-box overflow-hidden">
-          <img
-            src={movie.posterUrl}
-            alt={`Poster for ${movie.title}`}
-            className="w-full h-full object-cover rounded-box transition-transform duration-500 ease-out group-hover:scale-105"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src =
-                "https://placehold.co/800x400?text=No+Poster";
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100 rounded-box" />
-        </figure>
-        <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
-          {movie.genreNames && movie.genreNames.length > 0 && (
-            <div className="mb-1.5 transition-opacity duration-300 ease-out opacity-90 group-hover:opacity-100">
-              <span className="bg-neutral text-neutral-content px-2 py-0.5 text-xs font-medium rounded">
-                {movie.genreNames.slice(0, 2).join(" ")}
-              </span>
-            </div>
-          )}
-          <div className="px-3 py-1 rounded mx-auto inline-block transform transition-all duration-300 ease-out group-hover:translate-y-[-2px]">
-            <h3 className="text-sm font-medium leading-tight">{movie.title}</h3>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

@@ -7,6 +7,8 @@ import Navbar from "./components/Navbar";
 import { isAuthenticated } from "./auth";
 import ThemeSwitcher from "./components/ThemeSwitcher";
 import Index from "./pages/Index";
+import GenrePage from "./pages/Genre";
+import DiscoverPage from "./pages/Discover";
 
 interface RouteProps {
   children: React.ReactNode;
@@ -60,6 +62,24 @@ const App: React.FC = () => {
             <PublicRoute>
               <LogIn />
             </PublicRoute>
+          }
+        />
+        <Route
+          path="/genres"
+          element={
+            <GenrePage />
+          }
+        />
+        <Route
+          path="/genres/:genreName"
+          element={
+            <GenrePage />
+          }
+        />
+        <Route
+          path="/discover"
+          element={
+            <DiscoverPage />
           }
         />
       </Route>
