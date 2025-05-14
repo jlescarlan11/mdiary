@@ -170,11 +170,23 @@ const DiscoverPage = () => {
 
   return (
     <div className="container max-w-7xl mx-auto px-4 py-8">
+      {/* Header with breadcrumb navigation */}
+      <div className="mb-6">
+        {/* Breadcrumbs */}
+        <div className="text-sm breadcrumbs">
+          <ul>
+            <li>
+              <a className="hover:underline" onClick={() => navigate("/")}>
+                Home
+              </a>
+            </li>
+            <li>Discover</li>
+          </ul>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Discover Movies</h1>
-        <button className="btn btn-primary" onClick={() => navigate("/")}>
-          Back to Home
-        </button>
       </div>
 
       <div className="flex flex-wrap justify-between items-center mb-8">
@@ -252,26 +264,37 @@ const DiscoverPage = () => {
             >
               «
             </button>
-
-            {Array.from({ length: totalPages }).map((_, index) => (
-              <button
-                key={index}
-                className={`join-item btn ${
-                  currentPage === index + 1 ? "btn-active" : ""
-                }`}
-                onClick={() => paginate(index + 1)}
-              >
-                {index + 1}
-              </button>
-            ))}
-
+            
+            {/* Only show a subset of pages if there are many */}
+            {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
+              // For large page counts, show pages around current page
+              let pageNum = i + 1;
+              if (totalPages > 5) {
+                if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  className={`join-item btn ${
+                    currentPage === pageNum ? "btn-active" : ""
+                  }`}
+                  onClick={() => paginate(pageNum)}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+            
             <button
               className="join-item btn"
-              onClick={() =>
-                paginate(
-                  currentPage < totalPages ? currentPage + 1 : totalPages
-                )
-              }
+              onClick={() => paginate(currentPage < totalPages ? currentPage + 1 : totalPages)}
               disabled={currentPage === totalPages}
             >
               »
