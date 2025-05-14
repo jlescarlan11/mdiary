@@ -29,15 +29,11 @@ const GenrePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [genreGroups, setGenreGroups] = useState<GenreMovieGroup[]>([]);
-  const [currentGenre, setCurrentGenre] = useState<GenreMovieGroup | null>(
-    null
-  );
+  const [currentGenre, setCurrentGenre] = useState<GenreMovieGroup | null>(null);
   const [sortOption, setSortOption] = useState<string>("year-desc");
   const [displayMovies, setDisplayMovies] = useState<Movie[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  // isDropdownOpen state removed as DaisyUI handles this via tabIndex
-  const dropdownRef = useRef<HTMLDivElement>(null); // Still needed for click outside logic
+  const [genreSearchQuery, setGenreSearchQuery] = useState<string>("");
 
   const navigate = useNavigate();
   const params = useParams();
@@ -47,50 +43,20 @@ const GenrePage = () => {
     : null;
   const isGenresPage = location.pathname === "/genres";
 
-  // Close dropdown when clicking outside
-  // Note: This useEffect still uses dropdownRef, which is necessary for closing the dropdown
-  // when clicking outside of it, even if isDropdownOpen state is removed.
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      // Check if the click is outside the dropdown element
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        // Since we removed isDropdownOpen state, we can't programmatically close it this way.
-        // DaisyUI dropdowns typically close on outside clicks automatically due to focus loss
-        // when clicking outside the dropdown element. The tabIndex={0} on the label
-        // makes it focusable, and clicking outside shifts focus, closing the dropdown.
-        // We keep this listener in case there are specific scenarios where default behavior
-        // needs reinforcement, but it's less critical without direct state control.
-        // If you need programmatic closing, you might need a different approach or re-add state.
-      }
-    }
-
-    // Add the event listener
-    document.addEventListener("mousedown", handleClickOutside);
-
-    // Clean up the event listener on component unmount
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []); // Empty dependency array means this effect runs once on mount and cleans up on unmount
-
-  // Effect to fetch and process movie data
   useEffect(() => {
     const fetchAllMovies = async () => {
       try {
         setLoading(true);
-        // Fetch data from the dashboard endpoint
         const response = await axios.get(import.meta.env.VITE_GET_DASHBOARD);
 
-        // Combine movies from different categories and remove duplicates
+        // Combine movies from different categories
         const allMovies: Movie[] = [
           ...response.data.popularMovies,
           ...response.data.randomMovies,
           ...response.data.newestPerGenre,
         ];
 
+        // Deduplicate movies
         const uniqueMoviesMap = new Map<string, Movie>();
         allMovies.forEach((movie) => {
           if (!uniqueMoviesMap.has(movie.id)) {
@@ -110,8 +76,7 @@ const GenrePage = () => {
               // Add movie to the genre group, including calculated rating
               genreMap.get(genreNameValue)?.push({
                 ...movie,
-                genreNames: [genreNameValue], // Add genreNames for potential future use
-                // Calculate rating based on DiaryEntry count, capped between 1 and 10
+                genreNames: [genreNameValue],
                 rating: movie._count?.DiaryEntry
                   ? Math.min(10, Math.max(1, movie._count.DiaryEntry / 2))
                   : undefined,
@@ -120,10 +85,7 @@ const GenrePage = () => {
           }
         });
 
-        // Convert map to array, filter genres with less than 10 movies,
-        // limit movies per genre to 30 (randomly selected if more),
-        // sort movies within each genre by year (descending),
-        // and sort genres by the number of movies (descending)
+        // Process genres and their movies
         const genreGroupsArray = Array.from(genreMap.entries())
           .map(([genreName, movies]) => {
             // If there are more than 30 movies, randomly select only 30
@@ -131,21 +93,21 @@ const GenrePage = () => {
             if (movies.length > 30) {
               // Create a shuffled copy and take first 30
               displayMovies = [...movies]
-                .sort(() => 0.5 - Math.random()) // Shuffle randomly
-                .slice(0, 30); // Take the first 30
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 30);
             }
 
             return {
               genreName,
-              movies: displayMovies.sort((a, b) => b.year - a.year), // Sort movies by year descending
+              movies: displayMovies.sort((a, b) => b.year - a.year), // Sort by year descending
             };
           })
           .filter((group) => group.movies.length >= 10) // Only include genres with at least 10 movies
-          .sort((a, b) => b.movies.length - a.movies.length); // Sort genres by movie count descending
+          .sort((a, b) => b.movies.length - a.movies.length); // Sort by movie count
 
         setGenreGroups(genreGroupsArray);
 
-        // If a specific genre is requested in the URL, find and set it as the current genre
+        // If genreName is provided in URL, find that specific genre group
         if (genreName) {
           const specificGenre = genreGroupsArray.find(
             (group) => group.genreName.toLowerCase() === genreName.toLowerCase()
@@ -153,103 +115,99 @@ const GenrePage = () => {
 
           if (specificGenre) {
             setCurrentGenre(specificGenre);
-            // Initialize displayMovies with the movies from the specific genre, sorted by default
             setDisplayMovies(specificGenre.movies);
           } else {
-            // Set an error if the requested genre is not found or doesn't meet the minimum movie count
             setError(
               `No movies found for genre "${genreName}" or not enough movies to display.`
             );
           }
         }
 
-        setLoading(false); // Data fetching and processing is complete
+        setLoading(false);
       } catch (err) {
         console.error("Failed to fetch movies:", err);
         setError("Failed to load movies. Please try again later.");
-        setLoading(false); // Stop loading even if there's an error
+        setLoading(false);
       }
     };
 
-    fetchAllMovies(); // Execute the fetch operation
-  }, [genreName]); // Re-run this effect when the genreName in the URL changes
+    fetchAllMovies();
+    
+    // Reset search when navigating between genres
+    setSearchQuery("");
+    setGenreSearchQuery("");
+  }, [genreName]);
 
-  // Effect for sorting and filtering movies based on currentGenre, sortOption, and searchQuery
+  // Effect for sorting and filtering movies
   useEffect(() => {
-    // Only proceed if a genre is currently selected
     if (!currentGenre) return;
-
-    // Start with the original list of movies for the current genre
+    
     let filteredMovies = [...currentGenre.movies];
-
-    // Apply search filter if the search query is not empty
+    
+    // Apply search filter if any
     if (searchQuery.trim() !== "") {
       const query = searchQuery.toLowerCase();
-      filteredMovies = filteredMovies.filter(
-        (movie) =>
-          // Filter movies where title or year includes the search query (case-insensitive for title)
-          movie.title.toLowerCase().includes(query) ||
-          movie.year.toString().includes(query)
+      filteredMovies = filteredMovies.filter(movie => 
+        movie.title.toLowerCase().includes(query) || 
+        movie.year.toString().includes(query)
       );
     }
-
-    // Apply sorting based on the selected sort option
-    const sortedMovies = [...filteredMovies]; // Create a copy to avoid mutating the original array
+    
+    // Apply sorting
+    const sortedMovies = [...filteredMovies];
     switch (sortOption) {
       case "year-desc":
-        sortedMovies.sort((a, b) => b.year - a.year); // Sort by year descending
+        sortedMovies.sort((a, b) => b.year - a.year);
         break;
       case "year-asc":
-        sortedMovies.sort((a, b) => a.year - b.year); // Sort by year ascending
+        sortedMovies.sort((a, b) => a.year - b.year);
         break;
       case "title-asc":
-        sortedMovies.sort((a, b) => a.title.localeCompare(b.title)); // Sort by title ascending
+        sortedMovies.sort((a, b) => a.title.localeCompare(b.title));
         break;
       case "title-desc":
-        sortedMovies.sort((a, b) => b.title.localeCompare(a.title)); // Sort by title descending
+        sortedMovies.sort((a, b) => b.title.localeCompare(a.title));
         break;
       case "rating-desc":
-        // Sort by rating descending, treating undefined ratings as 0 for sorting purposes
         sortedMovies.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
       default:
-        // Default case, no sorting applied (or could apply a default sort)
         break;
     }
-
-    // Update the state with the sorted and filtered movies
+    
     setDisplayMovies(sortedMovies);
-  }, [currentGenre, sortOption, searchQuery]); // Re-run this effect when currentGenre, sortOption, or searchQuery changes
+  }, [currentGenre, sortOption, searchQuery]);
 
-  // Helper function to navigate to a specific genre page
+  // Navigate to genre handler
   const navigateToGenre = (genre: string) => {
-    // setSearchQuery(""); // Clear search query when navigating to a new genre
-    // Navigate to the new genre URL
     navigate(`/genres/${encodeURIComponent(genre)}`);
   };
 
-  // Get a random movie poster URL from the current genre for the header background
-  const getHeaderBackground = () => {
-    // If no current genre or no movies, return null
-    if (!currentGenre || currentGenre.movies.length === 0) return null;
-    // Select a random index from the first 5 movies (or fewer if less than 5)
-    const randomIndex = Math.floor(
-      Math.random() * Math.min(5, currentGenre.movies.length)
-    );
-    // Return the poster URL of the randomly selected movie
-    return currentGenre.movies[randomIndex]?.posterUrl;
+  // Navigate to all genres
+  const navigateToAllGenres = () => {
+    navigate("/genres");
   };
 
-  // Render loading state
+  // Navigate to movie detail
+  const navigateToMovie = (movieId: string) => {
+    navigate(`/movie/${movieId}`);
+  };
+
+  // Handle errors for image loading
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, isPoster = true) => {
+    (e.target as HTMLImageElement).src = isPoster 
+      ? "https://placehold.co/800x1200?text=No+Poster"
+      : "https://placehold.co/800x400?text=No+Image";
+  };
+
   if (loading) {
     return (
-      <div className="flex flex-col justify-center items-center h-64 gap-3">
+      <div className="flex flex-col justify-center items-center min-h-[50vh] gap-3 px-4">
         <span className="loading loading-spinner loading-lg"></span>
         <span className="font-medium text-base-content/70">
           Loading movies...
         </span>
         <div className="w-48 h-2 bg-base-300 rounded-full overflow-hidden">
-          {/* Simple loading bar animation */}
           <div
             className="h-full bg-primary animate-pulse"
             style={{ width: "70%" }}
@@ -259,288 +217,138 @@ const GenrePage = () => {
     );
   }
 
-  // Render error state
   if (error) {
     return (
-      <div className="alert alert-error max-w-md mx-auto">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="stroke-current shrink-0 h-6 w-6"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span>{error}</span>
-        {/* Button to navigate back to the all genres page */}
-        <button className="btn btn-sm" onClick={() => navigate("/genres")}>
-          Back to All Genres
-        </button>
+      <div className="max-w-md mx-auto my-12 px-4">
+        <div className="alert alert-error shadow-lg">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="stroke-current shrink-0 h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span>{error}</span>
+        </div>
+        <div className="flex justify-center mt-6">
+          <button className="btn btn-primary" onClick={navigateToAllGenres}>
+            Back to All Genres
+          </button>
+        </div>
       </div>
     );
   }
 
-  // Main component render
+  // Determine grid columns based on screen size for movie cards
+  const movieCardGridClasses = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6";
+
   return (
     <div className="container max-w-7xl mx-auto pb-12">
-      {/* Page Header with Genre Dropdown */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-2 gap-4 px-4 py-6">
-        <div className="flex items-center gap-3">
-          {/* Back button to All Genres */}
-          <button
-            className="btn btn-circle btn-sm btn-ghost"
-            onClick={() => navigate("/genres")}
-            aria-label="Back to all genres"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.75 19.5 8.25 12l7.5-7.5"
-              />
-            </svg>
-          </button>
-          <h1 className="text-3xl font-bold">Movies by Genre</h1>
-        </div>
-
-        <div className="flex gap-3">
-          {/* Genre Dropdown Selector - Improved with DaisyUI */}
-          {/* The dropdown state is managed by DaisyUI's CSS and the tabIndex attribute */}
-          <div className="dropdown dropdown-end" ref={dropdownRef}>
-            <label tabIndex={0} className="btn btn-primary m-1 min-w-[200px]">
-              {isGenresPage ? (
-                <>
-                  Browse Genres <span className="ml-2">▼</span>
-                </>
-              ) : (
-                <>
-                  {currentGenre?.genreName} <span className="ml-2">▼</span>
-                </>
-              )}
-            </label>
-            {/* The dropdown content is shown/hidden by DaisyUI based on the label's focus */}
-            <div
-              tabIndex={0} // Make the dropdown content focusable
-              className="dropdown-content z-[100] card card-compact bg-base-200 shadow-xl rounded-box w-80"
-            >
-              <div className="card-body">
-                {/* Search input for genres */}
-                <div className="form-control mb-2">
-                  <input
-                    type="text"
-                    placeholder="Search genres..."
-                    className="input input-sm input-bordered w-full"
-                    // Note: This search input filters the list of genres in the dropdown, not the movies
-                    // A separate search input is provided for filtering movies within a selected genre
-                    onChange={(e) => setSearchQuery(e.target.value)} // Update search query state
-                    value={searchQuery}
-                  />
-                </div>
-
-                {/* Link to view all genres */}
-                <a
-                  className={`btn btn-sm ${
-                    isGenresPage ? "btn-active" : "btn-ghost"
-                  } mb-2 justify-start`}
-                  onClick={() => navigate("/genres")} // Navigate to the all genres page
-                >
-                  All Genres
-                </a>
-
-                <div className="divider my-1">Select a Genre</div>
-
-                {/* Scrollable list of genres */}
-                <div className="max-h-[50vh] overflow-y-auto">
-                  <div className="grid grid-cols-1 gap-1">
-                    {/* Map through genre groups to create dropdown items */}
-                    {genreGroups
-                      .filter(
-                        (
-                          group // Filter genres based on the search query
-                        ) =>
-                          group.genreName
-                            .toLowerCase()
-                            .includes(searchQuery.toLowerCase())
-                      )
-                      .map((group) => (
-                        <button
-                          key={group.genreName}
-                          className={`btn btn-sm ${
-                            currentGenre?.genreName === group.genreName
-                              ? "btn-active"
-                              : "btn-ghost"
-                          } justify-between`}
-                          onClick={() => navigateToGenre(group.genreName)} // Navigate to the selected genre page
-                        >
-                          <span className="truncate">{group.genreName}</span>
-                          <span className="badge badge-sm">
-                            {group.movies.length}
-                          </span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* Header with breadcrumb navigation */}
+      <div className="px-4 py-6">
+        <div className="mb-6">
+          {/* Breadcrumbs */}
+          <div className="text-sm breadcrumbs">
+            <ul>
+              <li><a className="hover:underline" onClick={() => navigate("/")}>Home</a></li>
+              <li><a className="hover:underline" onClick={navigateToAllGenres}>Genres</a></li>
+              {!isGenresPage && <li>{currentGenre?.genreName}</li>}
+            </ul>
           </div>
-
-          {/* Button to navigate back to Home */}
-          <button className="btn btn-outline" onClick={() => navigate("/")}>
-            Back to Home
-          </button>
         </div>
+        
+        {/* Page Title */}
+        <h1 className="text-3xl font-bold mb-2">
+          {isGenresPage ? "Browse Genres" : currentGenre?.genreName}
+        </h1>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       {isGenresPage ? (
-        // Display All Genres Grid View when on /genres route
-        <>
-          <div className="mb-6 px-4">
-            <p className="text-lg">Browse all {genreGroups.length} genres</p>
+        // All Genres Grid View
+        <div className="px-4">
+          <div className="mb-6">
+            <p className="text-base-content/70">
+              Explore our collection of {genreGroups.length} movie genres
+            </p>
           </div>
 
-          {/* Grid of genre cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-12 px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6 mb-12">
             {genreGroups.map((group) => (
               <div
                 key={group.genreName}
-                className="aspect-video rounded-lg overflow-hidden relative cursor-pointer shadow-lg hover:shadow-xl transition-all group"
-                onClick={
-                  () =>
-                    navigate(`/genres/${encodeURIComponent(group.genreName)}`) // Navigate to the specific genre page on click
-                }
+                className="aspect-[2/3] rounded-lg overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
+                onClick={() => navigateToGenre(group.genreName)}
               >
-                {/* Use the first movie poster as the genre thumbnail */}
                 {group.movies[0] && (
                   <img
                     src={group.movies[0].posterUrl}
                     alt={group.genreName}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    onError={(e) => {
-                      // Provide a placeholder image if the poster fails to load
-                      (e.target as HTMLImageElement).src =
-                        "https://placehold.co/800x400?text=No+Poster";
-                    }}
+                    className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                    onError={(e) => handleImageError(e, false)}
                   />
                 )}
-                {/* Overlay gradient for better text readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-neutral/90 via-neutral/30 to-transparent"></div>
-                {/* Genre name and movie count overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
                 <div className="absolute inset-x-0 bottom-0 p-4 text-center">
                   <h2 className="text-xl font-bold text-white">
                     {group.genreName}
                   </h2>
-                  <p className="text-neutral-content">
+                  <p className="text-white/80">
                     {group.movies.length} movies
                   </p>
                 </div>
               </div>
             ))}
           </div>
-        </>
+        </div>
       ) : (
-        // Display Single Genre Movie Grid when a specific genre is selected
-        <>
-          {/* Hero section with genre info and background image */}
-          <div className="w-full mb-8 relative overflow-hidden">
-            {/* Background image with blur and opacity */}
-            {getHeaderBackground() && (
-              <div className="absolute inset-0 w-full h-full">
-                <img
-                  src={getHeaderBackground() || ""}
-                  alt={currentGenre?.genreName}
-                  className="w-full h-full object-cover object-center opacity-20 blur-sm"
-                />
-                {/* Gradient overlay on background image */}
-                <div className="absolute inset-0 bg-gradient-to-t from-base-100 via-base-100/80 to-base-100/70"></div>
-              </div>
-            )}
-
-            {/* Genre information and controls */}
-            <div className="px-4 py-10 relative z-10 container mx-auto">
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                {/* Genre poster collage (hidden on small screens) */}
-                <div className="aspect-[2/3] w-32 md:w-48 rounded-lg overflow-hidden shadow-xl relative hidden sm:block">
-                  {currentGenre && currentGenre.movies.length > 0 && (
-                    <img
-                      src={currentGenre.movies[0].posterUrl}
-                      alt={currentGenre.genreName}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Placeholder if poster fails
-                        (e.target as HTMLImageElement).src =
-                          "https://placehold.co/800x1200?text=No+Poster";
-                      }}
-                    />
-                  )}
+        // Single Genre Movie Grid with enhanced UI
+        <div>
+          {/* Genre Controls */}
+          <div className="w-full mb-6 px-4">
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start mb-6">
+              <p className="text-base-content/70 max-w-2xl">
+                Browse our collection of {currentGenre?.movies.length} {currentGenre?.genreName} movies,
+                from classics to the latest releases.
+              </p>
+              
+              {/* Controls and filtering */}
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <div className="form-control w-full sm:w-auto">
+                  <input
+                    type="text"
+                    placeholder="Search in this genre..."
+                    className="input input-sm input-bordered w-full sm:max-w-xs"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
-
-                {/* Genre title, count, description, and controls */}
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <h2 className="text-3xl font-bold">
-                      {currentGenre?.genreName}
-                    </h2>
-                    <div className="badge badge-lg">
-                      {currentGenre?.movies.length} movies
-                    </div>
-                  </div>
-
-                  <p className="text-base-content/70 mb-4">
-                    Browse our collection of {currentGenre?.genreName} movies,
-                    from classics to the latest releases.
-                  </p>
-
-                  {/* Search and Sort controls */}
-                  <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                    {/* Search input for movies within the current genre */}
-                    <div className="form-control max-w-xs">
-                      <input
-                        type="text"
-                        placeholder="Search in this genre..."
-                        className="input input-bordered w-full"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)} // Update search query state for movie filtering
-                      />
-                    </div>
-
-                    {/* Sort option select dropdown */}
-                    <select
-                      className="select select-bordered w-full max-w-xs"
-                      value={sortOption}
-                      onChange={(e) => setSortOption(e.target.value)} // Update sort option state
-                    >
-                      <option value="year-desc">Newest first</option>
-                      <option value="year-asc">Oldest first</option>
-                      <option value="title-asc">Title (A-Z)</option>
-                      <option value="title-desc">Title (Z-A)</option>
-                      <option value="rating-desc">Highest rated</option>
-                    </select>
-                  </div>
-                </div>
+                
+                <select 
+                  className="select select-sm select-bordered w-full sm:w-auto"
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value)}
+                >
+                  <option value="year-desc">Newest first</option>
+                  <option value="year-asc">Oldest first</option>
+                  <option value="title-asc">Title (A-Z)</option>
+                  <option value="title-desc">Title (Z-A)</option>
+                  <option value="rating-desc">Highest rated</option>
+                </select>
               </div>
             </div>
-          </div>
-
-          {/* Results count and stats */}
-          <div className="px-4 mb-6">
+            
+            {/* Results count and stats */}
             <div className="flex justify-between items-center">
               <p className="text-base-content/70">
-                {/* Display number of movies shown and search query if applicable */}
-                {displayMovies.length === 0
-                  ? "No movies found"
+                {displayMovies.length === 0 
+                  ? "No movies found" 
                   : `Showing ${displayMovies.length} movie${
                       displayMovies.length !== 1 ? "s" : ""
                     }`}
@@ -549,60 +357,49 @@ const GenrePage = () => {
             </div>
           </div>
 
-          {/* Movie grid with improved cards */}
+          {/* Movie grid with consistent card styling */}
           {displayMovies.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 px-4">
-              {/* Map through filtered and sorted movies to display cards */}
+            <div className={`${movieCardGridClasses} px-4`}>
               {displayMovies.map((movie) => (
                 <div
                   key={movie.id}
-                  className="group bg-base-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 flex flex-col h-full"
-                  onClick={() => navigate(`/movie/${movie.id}`)} // Navigate to the movie detail page on click
+                  className="aspect-[2/3] rounded-lg overflow-hidden relative cursor-pointer shadow-md hover:shadow-lg transition-all"
+                  onClick={() => navigateToMovie(movie.id)}
                 >
-                  {/* Movie poster */}
-                  <div className="aspect-[2/3] overflow-hidden relative">
-                    <img
-                      src={movie.posterUrl}
-                      alt={movie.title}
-                      className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-                      onError={(e) => {
-                        // Placeholder if poster fails
-                        (e.target as HTMLImageElement).src =
-                          "https://placehold.co/800x1200?text=No+Poster";
-                      }}
-                    />
-                    {/* Rating badge */}
+                  <img
+                    src={movie.posterUrl}
+                    alt={movie.title}
+                    className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                    onError={(e) => handleImageError(e)}
+                  />
+                  
+                  {movie.rating !== undefined && (
                     <div className="absolute top-2 right-2">
-                      {movie.rating !== undefined && ( // Only show badge if rating exists
-                        <div className="badge badge-primary">
-                          {movie.rating.toFixed(1)}
-                        </div>
-                      )}
+                      <div className="badge badge-primary">
+                        {movie.rating.toFixed(1)}
+                      </div>
                     </div>
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-base-200 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-
-                  {/* Movie title and year */}
-                  <div className="p-3 flex-grow flex flex-col">
-                    <h3 className="font-medium leading-tight mb-1 line-clamp-2 group-hover:text-primary transition-colors">
+                  )}
+                  
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
+                  
+                  <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
+                    <h3 className="font-medium text-sm sm:text-base line-clamp-2">
                       {movie.title}
                     </h3>
-                    <p className="text-sm text-base-content/70">{movie.year}</p>
+                    <p className="text-xs sm:text-sm text-white/80">{movie.year}</p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            // Display message when no movies are found after filtering/searching
-            <div className="flex flex-col items-center justify-center h-64 px-4">
+            <div className="flex flex-col items-center justify-center min-h-[40vh] px-4">
               <div className="text-6xl mb-4">🎬</div>
-              <h3 className="text-xl font-medium mb-2">No movies found</h3>
-              <p className="text-base-content/70 text-center mb-4">
+              <h3 className="text-xl font-bold mb-2">No movies found</h3>
+              <p className="text-base-content/70 text-center mb-4 max-w-md">
                 Try adjusting your search or explore a different genre
               </p>
-              {/* Button to clear the search query */}
-              <button
+              <button 
                 className="btn btn-primary"
                 onClick={() => setSearchQuery("")}
               >
@@ -610,8 +407,15 @@ const GenrePage = () => {
               </button>
             </div>
           )}
-        </>
+        </div>
       )}
+
+      {/* Footer */}
+      <footer className="footer footer-center p-4 mt-12 text-base-content border-t border-base-300">
+        <div>
+          <p className="text-sm">Browse and discover your favorite movies by genre</p>
+        </div>
+      </footer>
     </div>
   );
 };

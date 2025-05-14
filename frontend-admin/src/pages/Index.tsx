@@ -248,52 +248,18 @@ const MovieCarousel = () => {
     setTransitioning(true);
 
     const totalMovies = data.popularMovies.length;
-    const startOffset = swipeOffset;
-    const startTime = performance.now();
-    const duration = 350;
+    const newIndex =
+      direction === "next"
+        ? (currentIndex + 1) % totalMovies
+        : (currentIndex - 1 + totalMovies) % totalMovies;
 
-    const cardWidth =
-      carouselRef.current?.querySelector('div[style*="height: 24rem"]')
-        ?.clientWidth || 200;
-    const slideDistance = cardWidth * 1.5;
-
-    const targetOffset = direction === "next" ? -slideDistance : slideDistance;
-
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
-
-      const currentOffset =
-        startOffset + (targetOffset - startOffset) * easeOutCubic;
-      setSwipeOffset(currentOffset);
-
-      if (progress < 1) {
-        animationFrameId.current = requestAnimationFrame(animate);
-      } else {
-        setSkipTransition(true);
-        setTimeout(() => {
-          if (direction === "next") {
-            setCurrentIndex((prev) => (prev + 1) % totalMovies);
-          } else {
-            setCurrentIndex((prev) =>
-              prev === 0 ? totalMovies - 1 : prev - 1
-            );
-          }
-          setSwipeOffset(0);
-          setTimeout(() => {
-            setSkipTransition(false);
-            setTransitioning(false);
-          }, 30);
-        }, 0);
-      }
-    };
-
-    if (animationFrameId.current) {
-      cancelAnimationFrame(animationFrameId.current);
-    }
-    animationFrameId.current = requestAnimationFrame(animate);
+    setSkipTransition(true);
+    setSwipeOffset(0);
+    setTimeout(() => {
+      setSkipTransition(false);
+      setCurrentIndex(newIndex);
+      setTransitioning(false);
+    }, 50);
   };
 
   const animateSwipeReset = () => {
@@ -358,6 +324,16 @@ const MovieCarousel = () => {
 
   const handleDiscoverMore = () => {
     navigate("/discover");
+  };
+
+  // Navigate to specific genre
+  const navigateToGenre = (genre: string) => {
+    navigate(`/genres/${encodeURIComponent(genre)}`);
+  };
+
+  // Navigate to movie detail
+  const navigateToMovie = (movieId: string) => {
+    navigate(`/movie/${movieId}`);
   };
 
   if (loading) {
@@ -549,17 +525,22 @@ const MovieCarousel = () => {
             <div
               key={`${item.genreName}-${item.movie.id}`}
               className="group relative overflow-hidden rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300"
-              onClick={() =>
-                navigate(`/genres/${encodeURIComponent(item.genreName)}`)
-              }
             >
-              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-neutral-800/90 to-transparent p-3 z-10">
-                <h3 className="text-md font-semibold text-white">
+              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-neutral-800/90 to-transparent p-3 z-10"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     navigateToGenre(item.genreName);
+                   }}
+              >
+                <h3 className="text-md font-semibold text-white hover:underline">
                   {item.genreName}
                 </h3>
               </div>
 
-              <div className="h-80 overflow-hidden">
+              <div 
+                className="h-80 overflow-hidden"
+                onClick={() => navigateToMovie(item.movie.id)}
+              >
                 <img
                   src={item.movie.posterUrl}
                   alt={`${item.movie.title} - ${item.genreName}`}
@@ -572,7 +553,10 @@ const MovieCarousel = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100" />
               </div>
 
-              <div className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center">
+              <div 
+                className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center"
+                onClick={() => navigateToMovie(item.movie.id)}
+              >
                 <div className="px-3 py-1 rounded mx-auto inline-block">
                   <h3 className="text-sm font-medium leading-tight">
                     {item.movie.title}
@@ -596,7 +580,7 @@ const MovieCarousel = () => {
             <div
               key={movie.id}
               className="group relative overflow-hidden rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300"
-              onClick={() => navigate(`/movie/${movie.id}`)}
+              onClick={() => navigateToMovie(movie.id)}
             >
               <div className="h-80 overflow-hidden">
                 <img
