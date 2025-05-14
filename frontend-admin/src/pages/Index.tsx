@@ -526,18 +526,19 @@ const MovieCarousel = () => {
               key={`${item.genreName}-${item.movie.id}`}
               className="group relative overflow-hidden rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300"
             >
-              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-neutral-800/90 to-transparent p-3 z-10"
-                   onClick={(e) => {
-                     e.stopPropagation();
-                     navigateToGenre(item.genreName);
-                   }}
+              <div
+                className="absolute top-0 left-0 right-0 bg-gradient-to-b from-neutral-800/90 to-transparent p-3 z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigateToGenre(item.genreName);
+                }}
               >
                 <h3 className="text-md font-semibold text-white hover:underline">
                   {item.genreName}
                 </h3>
               </div>
 
-              <div 
+              <div
                 className="h-80 overflow-hidden"
                 onClick={() => navigateToMovie(item.movie.id)}
               >
@@ -553,7 +554,7 @@ const MovieCarousel = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-neutral/80 via-transparent to-transparent opacity-100" />
               </div>
 
-              <div 
+              <div
                 className="absolute bottom-0 left-0 right-0 p-4 text-neutral-content text-center"
                 onClick={() => navigateToMovie(item.movie.id)}
               >
@@ -615,13 +616,16 @@ const MovieCarousel = () => {
       </section>
 
       <section className="bg-base-200 rounded-lg p-8 text-center">
-        <h2 className="text-2xl font-bold mb-4">CANVAS</h2>
+        <h2 className="text-2xl font-bold mb-4">DIARY</h2>
         <p className="mb-6 max-w-2xl mx-auto">
-          Discover stories on CANVAS, a self-publishing platform for indie
-          creators
+          Discover stories on DIARY, a self-publishing platform for all movie
+          enthusiast.
         </p>
-        <button className="btn btn-primary" onClick={() => navigate("/canvas")}>
-          GO TO CANVAS
+        <button
+          className="btn btn-primary"
+          onClick={() => navigate("/diaries")}
+        >
+          GO TO DIARY
         </button>
       </section>
     </div>
