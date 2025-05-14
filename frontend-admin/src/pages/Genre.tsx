@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react"; // Removed useRef import
 import axios from "axios";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
@@ -29,11 +28,13 @@ const GenrePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [genreGroups, setGenreGroups] = useState<GenreMovieGroup[]>([]);
-  const [currentGenre, setCurrentGenre] = useState<GenreMovieGroup | null>(null);
+  const [currentGenre, setCurrentGenre] = useState<GenreMovieGroup | null>(
+    null
+  );
   const [sortOption, setSortOption] = useState<string>("year-desc");
   const [displayMovies, setDisplayMovies] = useState<Movie[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [genreSearchQuery, setGenreSearchQuery] = useState<string>("");
+  // Removed genreSearchQuery state as it was unused
 
   const navigate = useNavigate();
   const params = useParams();
@@ -132,27 +133,28 @@ const GenrePage = () => {
     };
 
     fetchAllMovies();
-    
+
     // Reset search when navigating between genres
     setSearchQuery("");
-    setGenreSearchQuery("");
+    // Removed setGenreSearchQuery call
   }, [genreName]);
 
   // Effect for sorting and filtering movies
   useEffect(() => {
     if (!currentGenre) return;
-    
+
     let filteredMovies = [...currentGenre.movies];
-    
+
     // Apply search filter if any
     if (searchQuery.trim() !== "") {
       const query = searchQuery.toLowerCase();
-      filteredMovies = filteredMovies.filter(movie => 
-        movie.title.toLowerCase().includes(query) || 
-        movie.year.toString().includes(query)
+      filteredMovies = filteredMovies.filter(
+        (movie) =>
+          movie.title.toLowerCase().includes(query) ||
+          movie.year.toString().includes(query)
       );
     }
-    
+
     // Apply sorting
     const sortedMovies = [...filteredMovies];
     switch (sortOption) {
@@ -174,7 +176,7 @@ const GenrePage = () => {
       default:
         break;
     }
-    
+
     setDisplayMovies(sortedMovies);
   }, [currentGenre, sortOption, searchQuery]);
 
@@ -194,8 +196,11 @@ const GenrePage = () => {
   };
 
   // Handle errors for image loading
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, isPoster = true) => {
-    (e.target as HTMLImageElement).src = isPoster 
+  const handleImageError = (
+    e: React.SyntheticEvent<HTMLImageElement>,
+    isPoster = true
+  ) => {
+    (e.target as HTMLImageElement).src = isPoster
       ? "https://placehold.co/800x1200?text=No+Poster"
       : "https://placehold.co/800x400?text=No+Image";
   };
@@ -246,7 +251,8 @@ const GenrePage = () => {
   }
 
   // Determine grid columns based on screen size for movie cards
-  const movieCardGridClasses = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6";
+  const movieCardGridClasses =
+    "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6";
 
   return (
     <div className="container max-w-7xl mx-auto pb-12">
@@ -256,13 +262,21 @@ const GenrePage = () => {
           {/* Breadcrumbs */}
           <div className="text-sm breadcrumbs">
             <ul>
-              <li><a className="hover:underline" onClick={() => navigate("/")}>Home</a></li>
-              <li><a className="hover:underline" onClick={navigateToAllGenres}>Genres</a></li>
+              <li>
+                <a className="hover:underline" onClick={() => navigate("/")}>
+                  Home
+                </a>
+              </li>
+              <li>
+                <a className="hover:underline" onClick={navigateToAllGenres}>
+                  Genres
+                </a>
+              </li>
               {!isGenresPage && <li>{currentGenre?.genreName}</li>}
             </ul>
           </div>
         </div>
-        
+
         {/* Page Title */}
         <h1 className="text-3xl font-bold mb-2">
           {isGenresPage ? "Browse Genres" : currentGenre?.genreName}
@@ -299,9 +313,7 @@ const GenrePage = () => {
                   <h2 className="text-xl font-bold text-white">
                     {group.genreName}
                   </h2>
-                  <p className="text-white/80">
-                    {group.movies.length} movies
-                  </p>
+                  <p className="text-white/80">{group.movies.length} movies</p>
                 </div>
               </div>
             ))}
@@ -314,10 +326,11 @@ const GenrePage = () => {
           <div className="w-full mb-6 px-4">
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start mb-6">
               <p className="text-base-content/70 max-w-2xl">
-                Browse our collection of {currentGenre?.movies.length} {currentGenre?.genreName} movies,
-                from classics to the latest releases.
+                Browse our collection of {currentGenre?.movies.length}{" "}
+                {currentGenre?.genreName} movies, from classics to the latest
+                releases.
               </p>
-              
+
               {/* Controls and filtering */}
               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                 <div className="form-control w-full sm:w-auto">
@@ -329,8 +342,8 @@ const GenrePage = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
-                
-                <select 
+
+                <select
                   className="select select-sm select-bordered w-full sm:w-auto"
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value)}
@@ -343,12 +356,12 @@ const GenrePage = () => {
                 </select>
               </div>
             </div>
-            
+
             {/* Results count and stats */}
             <div className="flex justify-between items-center">
               <p className="text-base-content/70">
-                {displayMovies.length === 0 
-                  ? "No movies found" 
+                {displayMovies.length === 0
+                  ? "No movies found"
                   : `Showing ${displayMovies.length} movie${
                       displayMovies.length !== 1 ? "s" : ""
                     }`}
@@ -372,7 +385,7 @@ const GenrePage = () => {
                     className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                     onError={(e) => handleImageError(e)}
                   />
-                  
+
                   {movie.rating !== undefined && (
                     <div className="absolute top-2 right-2">
                       <div className="badge badge-primary">
@@ -380,14 +393,16 @@ const GenrePage = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-70 hover:opacity-100 transition-opacity"></div>
-                  
+
                   <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
                     <h3 className="font-medium text-sm sm:text-base line-clamp-2">
                       {movie.title}
                     </h3>
-                    <p className="text-xs sm:text-sm text-white/80">{movie.year}</p>
+                    <p className="text-xs sm:text-sm text-white/80">
+                      {movie.year}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -399,7 +414,7 @@ const GenrePage = () => {
               <p className="text-base-content/70 text-center mb-4 max-w-md">
                 Try adjusting your search or explore a different genre
               </p>
-              <button 
+              <button
                 className="btn btn-primary"
                 onClick={() => setSearchQuery("")}
               >
@@ -413,7 +428,9 @@ const GenrePage = () => {
       {/* Footer */}
       <footer className="footer footer-center p-4 mt-12 text-base-content border-t border-base-300">
         <div>
-          <p className="text-sm">Browse and discover your favorite movies by genre</p>
+          <p className="text-sm">
+            Browse and discover your favorite movies by genre
+          </p>
         </div>
       </footer>
     </div>
