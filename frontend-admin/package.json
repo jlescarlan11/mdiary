@@ -9,6 +9,25 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jlescarlan11/mdiary.git"
+  },
+  "keywords": [
+    "movie",
+    "diary",
+    "sql",
+    "database",
+    "john",
+    "lester",
+    "escarlan"
+  ],
+  "author": "John Lester Escarlan <jlescarlan11@gmail.com> (https://john-lester-escarlan-portfolio.vercel.app/)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jlescarlan11/mdiary/issues"
+  },
+  "homepage": "https://github.com/jlescarlan11/mdiary#readme",
   "dependencies": {
     "@tailwindcss/vite": "^4.1.5",
     "@types/jwt-decode": "^2.2.1",
