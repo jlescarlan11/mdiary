@@ -225,6 +225,8 @@ const controller = {
         },
       });
 
+      await cache.invalidateAllMovieCaches();
+
       // Respond with the created movie object
       res.status(201).json(movie);
     } catch (error) {
@@ -344,6 +346,9 @@ const controller = {
         genres,
         directors,
       });
+
+      await cache.invalidateAllMovieCaches();
+
       res.status(200).json(updatedMovie);
     } catch (error) {
       console.error("Error in controller updating movie:", error);
@@ -362,6 +367,7 @@ const controller = {
     const { movieId } = req.params;
     try {
       await query.movie.deleteMovie(movieId);
+      await cache.invalidateAllMovieCaches();
       res.status(200).json({ message: "Movie deleted successfully." });
     } catch (error) {
       console.error("Error in controller deleting movie:", error);
@@ -499,6 +505,18 @@ const controller = {
       res
         .status(500)
         .json({ error: "An error occurred while deleting the user." });
+    }
+  },
+
+  getTopTenMovies: async (req, res) => {
+    try {
+      const result = await query.movie.getDashboardMovies();
+      res.status(200).json(result);
+    } catch (error) {
+      console.error("Error in controller fetching users:", error);
+      res
+        .status(500)
+        .json({ error: "An error occurred while fetching users." });
     }
   },
 };

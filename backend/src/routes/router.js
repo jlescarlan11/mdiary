@@ -11,6 +11,8 @@ router.get("/", (req, res) => res.json("hello from backend"));
 router.post("/api/auth/signup", controller.signup);
 router.post("/api/auth/login", controller.login);
 
+router.get("/api/dashboard", controller.getTopTenMovies);
+
 // Admin routes - grouped and protected by authentication and authorization middleware
 const adminRouter = express.Router();
 adminRouter.use(authenticate, authorize("ADMIN")); // Apply middleware to all admin routes

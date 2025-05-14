@@ -1,12 +1,16 @@
 // Load the Prisma client
 const { PrismaClient } = require("../../generated/prisma");
 const prisma = new PrismaClient();
+// Import the caching module
+const cache = require("./cache");
 
-// The query object with user and movie operations
+// The query object with user, genre, director, movie, and adminDashboard operations
 module.exports = {
   user: {
     create: async (username, email, password, admin) => {
       try {
+        // Note: User creation does not typically involve caching the created user immediately,
+        // but you might invalidate a 'getUsers' cache if that list is cached.
         return await prisma.user.create({
           data: {
             username,
@@ -21,23 +25,45 @@ module.exports = {
       }
     },
     getByEmail: async (email) => {
+      // Caching getByEmail might be useful if user lookups by email are frequent
+      // const cacheKey = cache.CACHE_KEYS.USER_EMAIL(email); // Assuming you define this key
+      // const cachedData = await cache.get(cacheKey);
+      // if (cachedData) return cachedData;
+
       try {
-        return await prisma.user.findUnique({ where: { email } });
+        const user = await prisma.user.findUnique({ where: { email } });
+        // if (user) await cache.set(cacheKey, user, 3600); // Cache for 1 hour
+        return user;
       } catch (error) {
         console.error("Prisma error getting user by email:", error);
         throw error;
       }
     },
     getById: async (id) => {
+      // Caching getById is often very beneficial
+      // const cacheKey = cache.CACHE_KEYS.USER_ID(id); // Assuming you define this key
+      // const cachedData = await cache.get(cacheKey);
+      // if (cachedData) return cachedData;
+
       try {
-        return await prisma.user.findUnique({ where: { id } });
+        const user = await prisma.user.findUnique({ where: { id } });
+        // if (user) await cache.set(cacheKey, user, 3600); // Cache for 1 hour
+        return user;
       } catch (error) {
         console.error("Prisma error getting user by id:", error);
         throw error;
       }
     },
-    // New function to fetch users with search, pagination, and diary entry count
+    // Fetch users with search, pagination, and diary entry count
     getUsers: async (search, page = 1, limit = 20) => {
+      // Caching the users list with pagination and search parameters
+      const cacheKey = cache.CACHE_KEYS.USERS_LIST(search, page, limit); // Assuming you define this key
+      const cachedData = await cache.get(cacheKey);
+
+      if (cachedData) {
+        return cachedData;
+      }
+
       const skip = (page - 1) * limit;
 
       // Build the where clause conditionally based on the search parameter
@@ -77,26 +103,36 @@ module.exports = {
           where: whereClause, // Use the same conditional where clause for counting
         });
 
-        return { users: formattedUsers, totalUsers };
+        const result = { users: formattedUsers, totalUsers };
+
+        // Cache the result for a reasonable time, e.g., 5 minutes (300 seconds)
+        await cache.set(cacheKey, result, 300);
+
+        return result;
       } catch (error) {
         console.error("Prisma error fetching users:", error);
         throw error;
       }
     },
-    // New function to update user role
+    // Update user role
     updateUserRole: async (userId, role) => {
       try {
         const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: { role },
         });
+        // Invalidate user-specific caches and potentially the users list cache
+        // cache.del(cache.CACHE_KEYS.USER_ID(userId)); // Assuming you have a user ID cache key
+        // Consider invalidating the getUsers cache if roles affect the list display
+        // cache.del(cache.CACHE_KEYS.USERS_LIST(...)); // You'd need to know the parameters
+
         return updatedUser;
       } catch (error) {
         console.error("Prisma error updating user role:", error);
         throw error;
       }
     },
-    // New function to delete a user
+    // Delete a user
     deleteUser: async (userId) => {
       try {
         // Consider adding logic here for cascading deletes if not handled by Prisma schema
@@ -110,6 +146,11 @@ module.exports = {
         await prisma.user.delete({
           where: { id: userId },
         });
+        // Invalidate user-specific caches and potentially the users list cache
+        // cache.del(cache.CACHE_KEYS.USER_ID(userId)); // Assuming you have a user ID cache key
+        // Consider invalidating the getUsers cache if deletion affects the list display
+        // cache.del(cache.CACHE_KEYS.USERS_LIST(...)); // You'd need to know the parameters
+
         return { message: "User deleted successfully." };
       } catch (error) {
         console.error("Prisma error deleting user:", error);
@@ -119,8 +160,19 @@ module.exports = {
   },
   genre: {
     getAll: async () => {
+      // Caching genres list
+      const cacheKey = cache.CACHE_KEYS.ALL_GENRES; // Assuming you define this key
+      const cachedData = await cache.get(cacheKey);
+
+      if (cachedData) {
+        return cachedData;
+      }
+
       try {
-        return await prisma.genre.findMany();
+        const genres = await prisma.genre.findMany();
+        // Cache for a longer time as genres don't change often, e.g., 24 hours (86400 seconds)
+        await cache.set(cacheKey, genres, 86400);
+        return genres;
       } catch (error) {
         console.error("Prisma error getting all genres:", error);
         throw error;
@@ -129,8 +181,19 @@ module.exports = {
   },
   director: {
     getAll: async () => {
+      // Caching directors list
+      const cacheKey = cache.CACHE_KEYS.ALL_DIRECTORS; // Assuming you define this key
+      const cachedData = await cache.get(cacheKey);
+
+      if (cachedData) {
+        return cachedData;
+      }
+
       try {
-        return await prisma.director.findMany();
+        const directors = await prisma.director.findMany();
+        // Cache for a longer time as directors don't change often, e.g., 24 hours (86400 seconds)
+        await cache.set(cacheKey, directors, 86400);
+        return directors;
       } catch (error) {
         console.error("Prisma error getting all directors:", error);
         throw error;
@@ -138,7 +201,211 @@ module.exports = {
     },
   },
   movie: {
-    // Modified function to get movies with search, pagination, and sorting
+    getDashboardMovies: async () => {
+      // Cache key for the dashboard movies
+      const cacheKey = cache.CACHE_KEYS.DASHBOARD;
+      const cachedData = await cache.get(cacheKey);
+
+      if (cachedData) {
+        return cachedData;
+      }
+
+      try {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        // 1. Get popular movies (most diary entries in last 7 days)
+        const recentPopularMovies = await prisma.movie.findMany({
+          take: 10,
+          orderBy: {
+            DiaryEntry: {
+              _count: "desc",
+            },
+          },
+          where: {
+            DiaryEntry: {
+              some: {
+                lastWatchedDate: {
+                  gte: sevenDaysAgo,
+                },
+              },
+            },
+          },
+          include: {
+            _count: {
+              select: {
+                DiaryEntry: {
+                  where: {
+                    lastWatchedDate: {
+                      gte: sevenDaysAgo,
+                    },
+                  },
+                },
+              },
+            },
+            genres: {
+              include: {
+                genre: true,
+              },
+            },
+          },
+        });
+
+        // If we didn't get enough popular movies, supplement with newest movies
+        let popularMovies = recentPopularMovies;
+        if (recentPopularMovies.length < 10) {
+          const needed = 10 - recentPopularMovies.length;
+          const newestMovies = await prisma.movie.findMany({
+            take: needed,
+            orderBy: [{ year: "desc" }, { createdAt: "desc" }],
+            where: {
+              id: {
+                notIn: recentPopularMovies.map((movie) => movie.id),
+              },
+            },
+            include: {
+              genres: {
+                include: {
+                  genre: true,
+                },
+              },
+            },
+          });
+          popularMovies = [...recentPopularMovies, ...newestMovies];
+        }
+
+        // 2. Get random movies with all necessary relations
+        const randomMovies = await prisma.movie.findMany({
+          take: 10,
+          orderBy: {
+            id: "asc", // Dummy order, we'll shuffle in JS
+          },
+          include: {
+            genres: {
+              include: {
+                genre: true,
+              },
+            },
+          },
+        });
+
+        // Shuffle the array to get random movies
+        const shuffledRandomMovies = [...randomMovies].sort(
+          () => 0.5 - Math.random()
+        );
+
+        // 3. Get newest movie per genre (only for our target genres)
+        const targetGenres = [
+          "Action",
+          "Comedy",
+          "Drama",
+          "Sci-Fi",
+          "Romance",
+          "Horror",
+          "Adventure",
+          "Thriller",
+          "Fantasy",
+          "Animation",
+        ];
+
+        const genres = await prisma.genre.findMany({
+          where: {
+            name: {
+              in: targetGenres,
+            },
+          },
+        });
+
+        // First get all IDs we need to exclude from newest per genre
+        const popularMovieIds = popularMovies.map((m) => m.id);
+        const randomMovieIds = shuffledRandomMovies.map((m) => m.id);
+        const allExcludedIds = [...popularMovieIds, ...randomMovieIds];
+
+        // Function to find a unique movie for a genre
+        const findUniqueMovieForGenre = async (genreId, excludedIds) => {
+          let attempts = 0;
+          const maxAttempts = 5; // Prevent infinite loops
+          let movie = null;
+
+          while (attempts < maxAttempts && !movie) {
+            movie = await prisma.movie.findFirst({
+              where: {
+                genres: {
+                  some: {
+                    genreId: genreId,
+                  },
+                },
+                id: {
+                  notIn: excludedIds,
+                },
+              },
+              orderBy: [{ year: "desc" }, { createdAt: "desc" }],
+              include: {
+                genres: {
+                  include: {
+                    genre: true,
+                  },
+                },
+              },
+            });
+
+            if (!movie) {
+              // If no movie found with exclusion, try without exclusion as a fallback
+              movie = await prisma.movie.findFirst({
+                where: {
+                  genres: {
+                    some: {
+                      genreId: genreId,
+                    },
+                  },
+                },
+                orderBy: [{ year: "desc" }, { createdAt: "desc" }],
+                include: {
+                  genres: {
+                    include: {
+                      genre: true,
+                    },
+                  },
+                },
+              });
+            }
+
+            attempts++;
+          }
+          return movie;
+        };
+
+        // Get newest per genre ensuring no duplicates across all sections
+        const newestPerGenre = [];
+        const usedMovieIds = new Set(allExcludedIds);
+
+        for (const genre of genres) {
+          const movie = await findUniqueMovieForGenre(
+            genre.id,
+            Array.from(usedMovieIds) // Pass current set of used IDs
+          );
+
+          if (movie) {
+            newestPerGenre.push(movie);
+            usedMovieIds.add(movie.id); // Add the found movie's ID to the used set
+          }
+        }
+
+        const result = {
+          popularMovies,
+          randomMovies: shuffledRandomMovies,
+          newestPerGenre,
+        };
+
+        // Cache the dashboard data for 1 hour (3600 seconds)
+        await cache.set(cacheKey, result, 3600);
+
+        return result;
+      } catch (err) {
+        console.log("Error:", err);
+        throw err;
+      }
+    },
     getMovies: async (
       search,
       page = 1,
@@ -146,6 +413,20 @@ module.exports = {
       sortColumn,
       sortDirection
     ) => {
+      // Create a cache key based on all parameters
+      const cacheKey = cache.CACHE_KEYS.MOVIES_LIST(
+        search,
+        page,
+        limit,
+        sortColumn,
+        sortDirection
+      );
+      const cachedData = await cache.get(cacheKey);
+
+      if (cachedData) {
+        return cachedData;
+      }
+
       const skip = (page - 1) * limit;
 
       // Build the where clause for searching across title, genre, and director
@@ -236,15 +517,27 @@ module.exports = {
           where: whereClause,
         });
 
-        return { movies: moviesWithAvgRating, totalMovies };
+        const result = { movies: moviesWithAvgRating, totalMovies };
+
+        // Cache the list for 15 minutes (900 seconds)
+        await cache.set(cacheKey, result, 900);
+        return result;
       } catch (error) {
         console.error("Prisma error fetching movies:", error);
         throw error;
       }
     },
 
-    // New function to get a single movie by ID
+    // Get a single movie by ID
     getMovieById: async (id) => {
+      // Cache key for a specific movie detail
+      const cacheKey = cache.CACHE_KEYS.MOVIE_DETAIL(id);
+      const cachedData = await cache.get(cacheKey);
+
+      if (cachedData) {
+        return cachedData;
+      }
+
       try {
         const movie = await prisma.movie.findUnique({
           where: { id },
@@ -255,7 +548,12 @@ module.exports = {
           },
         });
 
-        if (!movie) return null;
+        if (!movie) {
+          // If movie is not found, we might cache null or a specific indicator
+          // to avoid hitting the DB repeatedly for non-existent IDs, but be careful
+          // await cache.set(cacheKey, null, 60); // Cache not found for 1 minute
+          return null;
+        }
 
         // Fetch average rating for the single movie
         const averageRatingResult = await prisma.diaryEntry.groupBy({
@@ -281,6 +579,9 @@ module.exports = {
           entriesCount: movie._count.DiaryEntry,
           averageRating: averageRating, // Use 0 if no entries
         };
+
+        // Cache the movie detail for 1 hour (3600 seconds)
+        await cache.set(cacheKey, formattedMovie, 3600);
 
         return formattedMovie;
       } catch (error) {
@@ -308,7 +609,7 @@ module.exports = {
 
         // --- Handle Genre Updates ---
         // Get IDs of current genres associated with the movie
-        const currentGenreIds = existingMovie.genres.map((mg) => mg.genreId); // Use mg.genreId for MovieGenre
+        const currentGenreIds = existingMovie.genres.map((mg) => mg.genreId);
         // Find or create new genres from the incoming data
         const newGenreConnects = await Promise.all(
           genres.map(async (genreName) => {
@@ -331,18 +632,18 @@ module.exports = {
         // Determine genres to disconnect (current genres not in the new list)
         const genresToDisconnect = currentGenreIds
           .filter((genreId) => !newGenreIds.includes(genreId))
-          .map((genreId) => ({ genreId: genreId })); // Corrected: Removed movieId
+          .map((genreId) => ({ genreId: genreId }));
 
         // Determine genres to connect (new genres not in the current list)
         const genresToConnect = newGenreIds
           .filter((genreId) => !currentGenreIds.includes(genreId))
-          .map((genreId) => ({ genreId: genreId })); // Corrected: Removed movieId
+          .map((genreId) => ({ genreId: genreId }));
 
         // --- Handle Director Updates ---
         // Get IDs of current directors associated with the movie
         const currentDirectorIds = existingMovie.directors.map(
           (md) => md.directorId
-        ); // Use md.directorId for MovieDirector
+        );
         // Find or create new directors from the incoming data
         const newDirectorConnects = await Promise.all(
           directors.map(async (directorData) => {
@@ -370,12 +671,12 @@ module.exports = {
         // Determine directors to disconnect (current directors not in the new list)
         const directorsToDisconnect = currentDirectorIds
           .filter((directorId) => !newDirectorIds.includes(directorId))
-          .map((directorId) => ({ directorId: directorId })); // Corrected: Removed movieId
+          .map((directorId) => ({ directorId: directorId }));
 
         // Determine directors to connect (new directors not in the current list)
         const directorsToConnect = newDirectorIds
           .filter((directorId) => !currentDirectorIds.includes(directorId))
-          .map((directorId) => ({ directorId: directorId })); // Corrected: Removed movieId
+          .map((directorId) => ({ directorId: directorId }));
 
         // Perform the update
         const updatedMovie = await prisma.movie.update({
@@ -424,6 +725,16 @@ module.exports = {
           averageRating: averageRating,
         };
 
+        // --- Cache Invalidation ---
+        // Invalidate the cache for this specific movie detail
+        cache.del(cache.CACHE_KEYS.MOVIE_DETAIL(id));
+        // Invalidate the dashboard cache as popular/newest movies might change
+        cache.del(cache.CACHE_KEYS.DASHBOARD);
+        // Consider invalidating relevant movie list caches if the update affects search/sort results
+        // This can be complex depending on how many list variations you cache.
+        // A simple approach is to invalidate all movie list caches, or use a more sophisticated
+        // caching strategy that handles partial invalidation.
+
         return formattedUpdatedMovie;
       } catch (error) {
         console.error("Prisma error updating movie:", error);
@@ -431,7 +742,7 @@ module.exports = {
       }
     },
 
-    // New function to delete a movie
+    // Delete a movie
     deleteMovie: async (id) => {
       try {
         // Delete related records first to avoid foreign key constraints
@@ -443,6 +754,15 @@ module.exports = {
         await prisma.movie.delete({
           where: { id },
         });
+
+        // --- Cache Invalidation ---
+        // Invalidate the cache for this specific movie detail
+        cache.del(cache.CACHE_KEYS.MOVIE_DETAIL(id));
+        // Invalidate the dashboard cache as popular/newest movies might change
+        cache.del(cache.CACHE_KEYS.DASHBOARD);
+        // Consider invalidating relevant movie list caches
+        // cache.del(cache.CACHE_KEYS.MOVIES_LIST(...));
+
         return { message: "Movie deleted successfully." };
       } catch (error) {
         console.error("Prisma error deleting movie:", error);
@@ -452,6 +772,16 @@ module.exports = {
   },
   adminDashboard: {
     getAll: async (startDate, endDate) => {
+      // Caching admin dashboard data. Note: This might be sensitive data,
+      // so consider if caching is appropriate and who can access it.
+      // The cache key should probably include the date range.
+      const cacheKey = cache.CACHE_KEYS.ADMIN_DASHBOARD(startDate, endDate); // Assuming you define this key
+      const cachedData = await cache.get(cacheKey);
+
+      if (cachedData) {
+        return cachedData;
+      }
+
       try {
         // Fetch time-based analytics from DiaryEntry within the date range
         const stats = await prisma.diaryEntry.groupBy({
@@ -497,7 +827,7 @@ module.exports = {
         });
 
         // Format and return the data
-        return {
+        const result = {
           stats: stats.map((s) => ({
             date: s.lastWatchedDate.toISOString().slice(0, 10), // Format date as YYYY-MM-DD
             entryCount: s._count.id,
@@ -507,6 +837,11 @@ module.exports = {
           totals,
           activities: recentActivities, // Include recent activities
         };
+
+        // Cache admin dashboard data for a shorter time, e.g., 5 minutes (300 seconds)
+        await cache.set(cacheKey, result, 300);
+
+        return result;
       } catch (error) {
         console.error("Prisma error fetching admin dashboard data:", error);
         throw error;
