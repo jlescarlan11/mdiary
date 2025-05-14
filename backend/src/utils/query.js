@@ -211,190 +211,32 @@ module.exports = {
       }
 
       try {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-        // 1. Get popular movies (most diary entries in last 7 days)
-        const recentPopularMovies = await prisma.movie.findMany({
-          take: 10,
-          orderBy: {
-            DiaryEntry: {
-              _count: "desc",
-            },
-          },
-          where: {
-            DiaryEntry: {
-              some: {
-                lastWatchedDate: {
-                  gte: sevenDaysAgo,
-                },
+        // Get all movies with their genres
+        const allMovies = await prisma.movie.findMany({
+          include: {
+            genres: {
+              include: {
+                genre: true,
               },
             },
-          },
-          include: {
             _count: {
               select: {
-                DiaryEntry: {
-                  where: {
-                    lastWatchedDate: {
-                      gte: sevenDaysAgo,
-                    },
-                  },
-                },
-              },
-            },
-            genres: {
-              include: {
-                genre: true,
+                DiaryEntry: true,
               },
             },
           },
+          orderBy: [
+            { year: "desc" }, 
+            { createdAt: "desc" }
+          ],
         });
-
-        // If we didn't get enough popular movies, supplement with newest movies
-        let popularMovies = recentPopularMovies;
-        if (recentPopularMovies.length < 10) {
-          const needed = 10 - recentPopularMovies.length;
-          const newestMovies = await prisma.movie.findMany({
-            take: needed,
-            orderBy: [{ year: "desc" }, { createdAt: "desc" }],
-            where: {
-              id: {
-                notIn: recentPopularMovies.map((movie) => movie.id),
-              },
-            },
-            include: {
-              genres: {
-                include: {
-                  genre: true,
-                },
-              },
-            },
-          });
-          popularMovies = [...recentPopularMovies, ...newestMovies];
-        }
-
-        // 2. Get random movies with all necessary relations
-        const randomMovies = await prisma.movie.findMany({
-          take: 10,
-          orderBy: {
-            id: "asc", // Dummy order, we'll shuffle in JS
-          },
-          include: {
-            genres: {
-              include: {
-                genre: true,
-              },
-            },
-          },
-        });
-
-        // Shuffle the array to get random movies
-        const shuffledRandomMovies = [...randomMovies].sort(
-          () => 0.5 - Math.random()
-        );
-
-        // 3. Get newest movie per genre (only for our target genres)
-        const targetGenres = [
-          "Action",
-          "Comedy",
-          "Drama",
-          "Sci-Fi",
-          "Romance",
-          "Horror",
-          "Adventure",
-          "Thriller",
-          "Fantasy",
-          "Animation",
-        ];
-
-        const genres = await prisma.genre.findMany({
-          where: {
-            name: {
-              in: targetGenres,
-            },
-          },
-        });
-
-        // First get all IDs we need to exclude from newest per genre
-        const popularMovieIds = popularMovies.map((m) => m.id);
-        const randomMovieIds = shuffledRandomMovies.map((m) => m.id);
-        const allExcludedIds = [...popularMovieIds, ...randomMovieIds];
-
-        // Function to find a unique movie for a genre
-        const findUniqueMovieForGenre = async (genreId, excludedIds) => {
-          let attempts = 0;
-          const maxAttempts = 5; // Prevent infinite loops
-          let movie = null;
-
-          while (attempts < maxAttempts && !movie) {
-            movie = await prisma.movie.findFirst({
-              where: {
-                genres: {
-                  some: {
-                    genreId: genreId,
-                  },
-                },
-                id: {
-                  notIn: excludedIds,
-                },
-              },
-              orderBy: [{ year: "desc" }, { createdAt: "desc" }],
-              include: {
-                genres: {
-                  include: {
-                    genre: true,
-                  },
-                },
-              },
-            });
-
-            if (!movie) {
-              // If no movie found with exclusion, try without exclusion as a fallback
-              movie = await prisma.movie.findFirst({
-                where: {
-                  genres: {
-                    some: {
-                      genreId: genreId,
-                    },
-                  },
-                },
-                orderBy: [{ year: "desc" }, { createdAt: "desc" }],
-                include: {
-                  genres: {
-                    include: {
-                      genre: true,
-                    },
-                  },
-                },
-              });
-            }
-
-            attempts++;
-          }
-          return movie;
-        };
-
-        // Get newest per genre ensuring no duplicates across all sections
-        const newestPerGenre = [];
-        const usedMovieIds = new Set(allExcludedIds);
-
-        for (const genre of genres) {
-          const movie = await findUniqueMovieForGenre(
-            genre.id,
-            Array.from(usedMovieIds) // Pass current set of used IDs
-          );
-
-          if (movie) {
-            newestPerGenre.push(movie);
-            usedMovieIds.add(movie.id); // Add the found movie's ID to the used set
-          }
-        }
-
+        
+        // Still provide the expected structure for the frontend
+        // but populate all fields with the complete movie list
         const result = {
-          popularMovies,
-          randomMovies: shuffledRandomMovies,
-          newestPerGenre,
+          popularMovies: allMovies,
+          randomMovies: allMovies,
+          newestPerGenre: allMovies,
         };
 
         // Cache the dashboard data for 1 hour (3600 seconds)
