@@ -1,48 +1,23 @@
-// src/components/Navbar.tsx
 import React from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { logout, isAuthenticated } from "../auth";
-import { LuLaptopMinimal } from "react-icons/lu";
 
-interface NavbarProps {
-  children?: React.ReactNode;
-}
+import ThemeSwitcher from "./ThemeSwitcher";
 
-const Navbar: React.FC<NavbarProps> = ({ children }) => {
-  const navigate = useNavigate();
+type NavbarProps = object;
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
+const Navbar: React.FC<NavbarProps> = () => {
   return (
-    <div className="p-4 bg-base-100 ">
-      <div className="container max-w-7xl mx-auto flex items-center justify-between ">
-        <div className="text-xl flex items-center gap-4">
-          <LuLaptopMinimal className="" />
-          <h1 className="font-bold">MovieDiary</h1>
+    <div className="bg-base-100 shadow-sm">
+      <div className="navbar container max-w-7xl mx-auto">
+        <div className="flex-1">
+          <a className="btn btn-ghost text-xl">MovieDiary</a>
         </div>
-
-        <div className="flex items-center space-x-4">
-          {children}
-          {isAuthenticated() ? (
-            <button onClick={handleLogout} className="btn btn-sm btn-outline">
-              Logout
-            </button>
-          ) : (
-            <>
-              <Link to="/" className="btn btn-sm btn-ghost">
-                Home
-              </Link>
-              <Link to="/login" className="btn btn-sm btn-ghost">
-                Login
-              </Link>
-              <Link to="/signup" className="btn btn-sm btn-ghost">
-                Signup
-              </Link>
-            </>
-          )}
+        <div className="flex-none flex">
+          <ul className="menu menu-horizontal px-1 flex items-center gap-4">
+            <ThemeSwitcher />
+            <li>
+              <button className="btn btn-outline">Login</button>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
