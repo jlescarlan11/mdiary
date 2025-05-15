@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "./Navbar";
-import ThemeSwitcher from "./ThemeSwitcher";
 import LoginModal from "./LoginModal"; // Import the new login modal component
 import SignupModal from "./SignupModal"; // Import the new signup modal component
 
