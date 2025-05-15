@@ -1,12 +1,14 @@
 // src/App.tsx
 import React, { useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
-import Signup from "./pages/SignUp";
+
 import LogIn from "./pages/LogIn";
-import Dashboard from "./pages/Dashboard";
 import Navbar from "./components/Navbar";
-import ThemeSwitcher from "./components/ThemeSwitcher";
 import { isAuthenticated } from "./auth";
+import ThemeSwitcher from "./components/ThemeSwitcher";
+import Index from "./pages/Index";
+import GenrePage from "./pages/Genre";
+import DiscoverPage from "./pages/Discover";
 
 interface RouteProps {
   children: React.ReactNode;
@@ -17,7 +19,7 @@ const ProtectedRoute: React.FC<RouteProps> = ({ children }) =>
     <>{children}</>
   ) : (
     <>
-      <Dashboard />
+      <Index />
     </>
   );
 
@@ -44,36 +46,29 @@ const Layout: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <div className="container mx-auto max-w-7xl">
-      <Routes>
-        <Route element={<Layout />}>
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
-                <LogIn />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/signup"
-            element={
-              <PublicRoute>
-                <Signup />
-              </PublicRoute>
-            }
-          />
-        </Route>
-      </Routes>
-    </div>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Index />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LogIn />
+            </PublicRoute>
+          }
+        />
+        <Route path="/genres" element={<GenrePage />} />
+        <Route path="/genres/:genreName" element={<GenrePage />} />
+        <Route path="/discover" element={<DiscoverPage />} />
+      </Route>
+    </Routes>
   );
 };
 
