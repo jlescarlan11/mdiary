@@ -430,7 +430,7 @@ const MovieCarousel = () => {
         <div className="text-center">
           {/* Responsive H1 */}
           <h1 className="text-2xl sm:text-3xl md:text-4xl text-center font-bold">
-            Welcome to MovieDiary!
+            Welcome to Talarama!
           </h1>
           {/* Responsive subtitle */}
           <span className="text-sm sm:text-base md:text-lg">

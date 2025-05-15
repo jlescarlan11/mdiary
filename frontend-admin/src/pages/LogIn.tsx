@@ -62,7 +62,7 @@ const LogIn: React.FC = () => {
     <div className="min-h-screen flex flex-col items-center bg-base-100 py-8 px-4">
       <div className="text-4xl flex items-center mb-8 gap-4">
         <LuLaptopMinimal className="" />
-        <h1 className="font-bold">MovieDiary</h1>
+        <h1 className="font-bold">Talarama</h1>
       </div>
       <form
         onSubmit={handleSubmit}
