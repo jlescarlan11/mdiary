@@ -16,12 +16,14 @@ const ThemeSwitcher: React.FC = () => {
     { name: "dark", colors: ["#1e293b", "#0f172a", "#38bdf8"] },
     { name: "emerald", colors: ["#ffffff", "#d1fae5", "#10b981"] },
     { name: "corporate", colors: ["#ffffff", "#f3f4f6", "#4f46e5"] },
-    { name: "aqua", colors: ["#e0f2fe", "#bae6fd", "#0369a1"] },
-    { name: "sunset", colors: ["#fef3c7", "#fde68a", "#f59e0b"] },
     { name: "night", colors: ["#1e293b", "#0f172a", "#7dd3fc"] },
     { name: "valentine", colors: ["#f0d6e8", "#f5c6e6", "#e96d7b"] },
     { name: "forest", colors: ["#171212", "#0c0c0c", "#1eb854"] },
     { name: "lofi", colors: ["#ffffff", "#f5f5f5", "#000000"] },
+    { name: "coffee", colors: ["#f8f0e3", "#d9c3a5", "#6b4f4f"] },
+    { name: "black", colors: ["#000000", "#1a1a1a", "#333333"] },
+    { name: "business", colors: ["#ffffff", "#f3f4f6", "#0a2540"] },
+    { name: "luxury", colors: ["#fdf6e3", "#e5d5b2", "#bfa46f"] },
   ];
 
   return (
